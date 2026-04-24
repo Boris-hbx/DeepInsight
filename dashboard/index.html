@@ -8,26 +8,28 @@
 </head>
 <body>
 
-<header class="hero">
-  <div class="hero-inner">
-    <div class="hero-left">
-      <h1>DeepInsight</h1>
-      <p class="tagline">项目运作看板 <span class="ver" id="version-tag"></span></p>
+<div class="sticky-top">
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="hero-left">
+        <h1>DeepInsight</h1>
+        <span class="tagline">项目运作看板 <span class="ver" id="version-tag"></span></span>
+      </div>
+      <div class="hero-right">
+        <span class="badge" id="updated-at">—</span>
+        <a class="btn" id="repo-link" target="_blank" rel="noopener">GitHub →</a>
+      </div>
     </div>
-    <div class="hero-right">
-      <span class="badge" id="updated-at">—</span>
-      <a class="btn" id="repo-link" target="_blank" rel="noopener">GitHub 仓库 →</a>
-    </div>
-  </div>
-</header>
+  </header>
 
-<nav class="tabs" role="tablist">
-  <a href="#manual" class="tab active" data-tab="manual">运作手册</a>
-  <a href="#slices" class="tab" data-tab="slices">切片墙</a>
-  <a href="#agents" class="tab" data-tab="agents">Agent 协作度</a>
-  <a href="#adr" class="tab" data-tab="adr">ADR 索引</a>
-  <a href="#skills" class="tab" data-tab="skills">Skill 注册表</a>
-</nav>
+  <nav class="tabs" role="tablist">
+    <a href="#manual" class="tab active" data-tab="manual">运作手册</a>
+    <a href="#slices" class="tab" data-tab="slices">切片墙</a>
+    <a href="#agents" class="tab" data-tab="agents">Agent 协作度</a>
+    <a href="#adr" class="tab" data-tab="adr">ADR 索引</a>
+    <a href="#skills" class="tab" data-tab="skills">Skill 注册表</a>
+  </nav>
+</div>
 
 <main>
   <section id="manual" class="panel active">

@@ -47,11 +47,20 @@ pre {
 }
 pre code { background: none; padding: 0; color: var(--text); }
 
-/* Hero */
+/* Sticky top bar (hero + tabs) */
+.sticky-top {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+/* Hero (compact) */
 .hero {
   background: linear-gradient(135deg, #1a1d28 0%, #15171e 100%);
   border-bottom: 1px solid var(--border);
-  padding: 28px 0;
+  padding: 10px 0;
 }
 .hero-inner {
   max-width: 1200px;
@@ -60,23 +69,30 @@ pre code { background: none; padding: 0; color: var(--text); }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.hero-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   flex-wrap: wrap;
 }
 .hero h1 {
   margin: 0;
-  font-size: 32px;
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   background: linear-gradient(90deg, var(--accent) 0%, #f2a57b 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  line-height: 1.2;
 }
 .hero .tagline {
-  margin: 4px 0 0;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 13px;
+  line-height: 1.2;
 }
 .hero .ver {
   display: inline-block;
@@ -92,18 +108,18 @@ pre code { background: none; padding: 0; color: var(--text); }
 .badge {
   background: var(--accent-soft);
   color: var(--accent);
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 12px;
   border: 1px solid rgba(224, 118, 58, 0.3);
 }
 .btn {
   background: var(--bg-elev);
   color: var(--text);
-  padding: 6px 14px;
+  padding: 5px 12px;
   border-radius: 6px;
   border: 1px solid var(--border);
-  font-size: 13px;
+  font-size: 12px;
   transition: all 0.15s;
 }
 .btn:hover {
@@ -121,14 +137,15 @@ pre code { background: none; padding: 0; color: var(--text); }
   display: flex;
   gap: 2px;
   border-bottom: 1px solid var(--border);
+  background: var(--bg);
   overflow-x: auto;
   white-space: nowrap;
   scrollbar-width: thin;
 }
 .tab {
-  padding: 14px 18px;
+  padding: 10px 16px;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13.5px;
   border-bottom: 2px solid transparent;
   transition: all 0.15s;
 }
@@ -234,9 +251,11 @@ main {
 }
 
 @media (max-width: 700px) {
-  .hero-inner { flex-direction: column; align-items: flex-start; }
+  .hero { padding: 8px 0; }
+  .hero-inner { gap: 8px; }
+  .hero h1 { font-size: 18px; }
+  .hero .tagline { font-size: 12px; }
   .panel-body { padding: 20px 18px; }
-  .hero h1 { font-size: 26px; }
-  .tab { padding: 12px 12px; font-size: 13px; }
+  .tab { padding: 9px 12px; font-size: 12.5px; }
   main { padding: 20px 14px; }
 }
