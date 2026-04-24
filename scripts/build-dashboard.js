@@ -18,6 +18,7 @@ const { marked } = require('marked');
 const ROOT = path.resolve(__dirname, '..');
 const DRAFT_PATH = path.join(ROOT, '项目初始化草稿.md');
 const TASKBOARD_PATH = path.join(ROOT, 'docs', 'task-board.md');
+const STEWARDSHIP_PATH = path.join(ROOT, 'docs', 'stewardship.md');
 const DASHBOARD_DIR = path.join(ROOT, 'dashboard');
 const DIST_DIR = path.join(ROOT, 'dist');
 
@@ -44,6 +45,96 @@ function readTaskBoard() {
   const raw = fs.readFileSync(TASKBOARD_PATH, 'utf-8');
   log('读取任务看板：' + raw.length + ' 字符');
   return raw;
+}
+
+function readStewardship() {
+  if (!fs.existsSync(STEWARDSHIP_PATH)) {
+    warn('未找到 docs/stewardship.md，责任田将显示占位');
+    return '';
+  }
+  const raw = fs.readFileSync(STEWARDSHIP_PATH, 'utf-8');
+  log('读取责任田：' + raw.length + ' 字符');
+  return raw;
+}
+
+/**
+ * 从 docs/stewardship.md 解析 8 片责任田。
+ * 每片形状：
+ *   ### Z-N 领域名称
+ *   - **守护人**：待认领 / 代号
+ *   - **覆盖**：单行描述
+ *   - **主要杠杆产出**：
+ *     - 产出 1
+ *     - 产出 2
+ *   - **被 @ 默认 reviewer 触发条件**：...
+ *
+ * 解析策略：按 `### Z-N` 切块，每块抽取「守护人」「覆盖」，以及「主要杠杆产出」下的二级列表。
+ */
+function parseStewardship(raw) {
+  if (!raw) return { zones: [], stats: { total: 0, claimed: 0, open: 0 } };
+
+  const zoneRegex = /^###\s+(Z-\d+)\s+(.+?)\s*$/gm;
+  const matches = [...raw.matchAll(zoneRegex)];
+  const zones = [];
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    const start = m.index;
+    const end = i + 1 < matches.length ? matches[i + 1].index : raw.length;
+    const block = raw.slice(start, end);
+    zones.push(parseZoneBlock(block, m[1], m[2]));
+  }
+
+  const stats = {
+    total: zones.length,
+    claimed: zones.filter((z) => z.claimed).length,
+    open: zones.filter((z) => !z.claimed).length
+  };
+  log('解析责任田：' + zones.length + ' 片（已认领 ' + stats.claimed + ' · 待认领 ' + stats.open + '）');
+  return { zones, stats };
+}
+
+function parseZoneBlock(block, id, name) {
+  const field = (label) => {
+    const re = new RegExp('^- \\*\\*' + label + '\\*\\*[:：]\\s*(.+)$', 'm');
+    const m = block.match(re);
+    return m ? m[1].trim() : '';
+  };
+
+  // 抽「主要杠杆产出」下的二级列表。定位到该字段所在行，往下读缩进的 `  - ...` 直到遇到非缩进行。
+  const leverageLines = [];
+  const lines = block.split(/\r?\n/);
+  let inLeverage = false;
+  for (const line of lines) {
+    if (/^- \*\*主要杠杆产出\*\*[:：]/.test(line)) {
+      inLeverage = true;
+      continue;
+    }
+    if (inLeverage) {
+      // 二级列表项：`  - ` 开头
+      const subMatch = line.match(/^\s{2,}-\s+(.+)$/);
+      if (subMatch) {
+        leverageLines.push(subMatch[1].trim());
+      } else if (line.startsWith('- ') || line.startsWith('### ') || line.startsWith('## ')) {
+        // 进入了下一个字段 / 下一个 zone，停
+        break;
+      } else if (line.trim() === '') {
+        // 空行先跳过，可能列表继续
+        continue;
+      }
+    }
+  }
+
+  const guardian = field('守护人');
+  return {
+    id,
+    name,
+    guardian,
+    claimed: guardian !== '' && guardian !== '待认领',
+    coverage: field('覆盖'),
+    leverage: leverageLines,
+    trigger: field('被 @ 默认 reviewer 触发条件'),
+    stage: field('当前阶段')
+  };
 }
 
 /**
@@ -176,7 +267,7 @@ function renderMarkdown(raw) {
   return marked.parse(raw || '');
 }
 
-function buildData(manualHtml, taskboard) {
+function buildData(manualHtml, taskboard, stewardship) {
   return {
     generatedAt: new Date().toISOString(),
     title: 'DeepInsight 项目运作看板',
@@ -195,6 +286,16 @@ function buildData(manualHtml, taskboard) {
       : {
           placeholder: true,
           message: '等待 docs/task-board.md 注入首批任务令。本面板将按 8 位同事分卡片显示各自的 T-xxx 令、状态、优先级。'
+        },
+    stewardship: stewardship && stewardship.zones.length > 0
+      ? {
+          placeholder: false,
+          zones: stewardship.zones,
+          stats: stewardship.stats
+        }
+      : {
+          placeholder: true,
+          message: '等待 docs/stewardship.md 注入责任田划分。'
         },
     sliceWall: {
       placeholder: true,
@@ -254,7 +355,9 @@ function main() {
   const manualHtml = renderMarkdown(raw);
   const taskboardRaw = readTaskBoard();
   const taskboard = parseTaskBoard(taskboardRaw);
-  const data = buildData(manualHtml, taskboard);
+  const stewardshipRaw = readStewardship();
+  const stewardship = parseStewardship(stewardshipRaw);
+  const data = buildData(manualHtml, taskboard, stewardship);
   prepareDist();
   writeIndexHtml(data);
   copyAssets();

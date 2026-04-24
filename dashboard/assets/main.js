@@ -27,6 +27,9 @@
   // Task board panel
   renderTaskboard(document.getElementById('taskboard-body'), data);
 
+  // Stewardship panel
+  renderStewardship(document.getElementById('stewardship-body'), data);
+
   // Placeholder panels
   const placeholders = {
     slices: { title: '切片墙', data: data.sliceWall },
@@ -181,5 +184,70 @@
   function stripPriority(p) {
     const m = (p || '').match(/P\d/);
     return m ? m[0] : (p || '');
+  }
+
+  function renderStewardship(el, data) {
+    if (!el) return;
+    const st = data.stewardship || {};
+    if (st.placeholder) {
+      el.classList.add('placeholder');
+      el.innerHTML =
+        '<div class="empty-state">' +
+        '<div class="empty-icon">🌾</div>' +
+        '<h3>责任田（尚未填充）</h3>' +
+        '<p>' + escapeHtml(st.message || '等待 docs/stewardship.md 划分责任田。') + '</p>' +
+        '<div class="hint">编辑 <code>docs/stewardship.md</code> → <code>npm run build</code> 刷新</div>' +
+        '</div>';
+      return;
+    }
+    el.classList.remove('placeholder');
+
+    const zones = st.zones || [];
+    const stats = st.stats || { total: 0, claimed: 0, open: 0 };
+
+    let html = '';
+    html += '<div class="tb-summary">';
+    html += '<div class="tb-summary-title">责任田（守护人制度）</div>';
+    html += '<div class="tb-summary-stats">';
+    html += statPill('总片数', stats.total, '');
+    html += statPill('已认领', stats.claimed, 'tb-stat-done');
+    html += statPill('待认领', stats.open, 'tb-stat-open');
+    html += '</div>';
+    html += '<p class="tb-hint">双轴 ownership · 守护人 ≠ 审批网关 · 真源：<code>docs/stewardship.md</code></p>';
+    html += '</div>';
+
+    html += '<div class="sw-grid">';
+    zones.forEach(function (z) { html += renderZoneCard(z); });
+    html += '</div>';
+
+    el.innerHTML = html;
+  }
+
+  function renderZoneCard(z) {
+    const claimedCls = z.claimed ? 'sw-claimed' : 'sw-open';
+    const guardianLabel = z.claimed ? z.guardian : '待认领';
+    let h = '<div class="sw-card ' + claimedCls + '">';
+    h += '<div class="sw-card-head">';
+    h += '<span class="sw-zone-id">' + escapeHtml(z.id) + '</span>';
+    h += '<span class="sw-zone-name">' + escapeHtml(z.name) + '</span>';
+    h += '</div>';
+    h += '<div class="sw-guardian"><span class="sw-guardian-label">守护人</span><span class="sw-guardian-name">' + escapeHtml(guardianLabel) + '</span></div>';
+    if (z.coverage) {
+      h += '<div class="sw-coverage">' + escapeHtml(z.coverage) + '</div>';
+    }
+    if (z.leverage && z.leverage.length) {
+      h += '<div class="sw-leverage-title">主要杠杆产出</div>';
+      h += '<ul class="sw-leverage">';
+      z.leverage.forEach(function (x) { h += '<li>' + escapeHtml(x) + '</li>'; });
+      h += '</ul>';
+    }
+    if (z.trigger) {
+      h += '<div class="sw-trigger">触发默认 reviewer：' + escapeHtml(z.trigger) + '</div>';
+    }
+    if (z.stage) {
+      h += '<div class="sw-stage">当前阶段：' + escapeHtml(z.stage) + '</div>';
+    }
+    h += '</div>';
+    return h;
   }
 })();
