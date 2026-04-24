@@ -24,6 +24,9 @@
     }
   }
 
+  // Task board panel
+  renderTaskboard(document.getElementById('taskboard-body'), data);
+
   // Placeholder panels
   const placeholders = {
     slices: { title: '切片墙', data: data.sliceWall },
@@ -74,5 +77,109 @@
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
+  }
+
+  function renderTaskboard(el, data) {
+    if (!el) return;
+    const tb = data.taskboard || {};
+    if (tb.placeholder) {
+      el.classList.add('placeholder');
+      el.innerHTML =
+        '<div class="empty-state">' +
+        '<div class="empty-icon">📋</div>' +
+        '<h3>任务看板（尚未填充）</h3>' +
+        '<p>' + escapeHtml(tb.message || '等待 docs/task-board.md 注入任务令。') + '</p>' +
+        '<div class="hint">编辑 <code>docs/task-board.md</code> → <code>npm run build</code> 刷新</div>' +
+        '</div>';
+      return;
+    }
+    el.classList.remove('placeholder');
+
+    const team = data.team || [];
+    const byAssignee = tb.byAssignee || {};
+    const stats = tb.stats || { total: 0, open: 0, inProgress: 0, done: 0 };
+
+    let html = '';
+    html += '<div class="tb-summary">';
+    html += '<div class="tb-summary-title">任务看板</div>';
+    html += '<div class="tb-summary-stats">';
+    html += statPill('总数', stats.total, '');
+    html += statPill('待接令', stats.open, 'tb-stat-open');
+    html += statPill('进行中', stats.inProgress, 'tb-stat-progress');
+    html += statPill('已完成', stats.done, 'tb-stat-done');
+    html += '</div>';
+    html += '<p class="tb-hint">真源：<code>docs/task-board.md</code>。改 md → <code>npm run build</code> 重渲染。</p>';
+    html += '</div>';
+
+    html += '<div class="tb-grid">';
+    team.forEach(function (name) {
+      html += renderAssigneeCard(name, byAssignee[name] || []);
+    });
+    // 共享 / 未分配
+    if ((byAssignee['@All'] || []).length > 0) {
+      html += renderAssigneeCard('@All（全员）', byAssignee['@All'], 'tb-card-all');
+    }
+    if ((byAssignee['未分配'] || []).length > 0) {
+      html += renderAssigneeCard('未分配', byAssignee['未分配'], 'tb-card-unassigned');
+    }
+    html += '</div>';
+
+    el.innerHTML = html;
+  }
+
+  function statPill(label, value, cls) {
+    return '<span class="tb-stat ' + cls + '">' +
+      '<span class="tb-stat-label">' + escapeHtml(label) + '</span>' +
+      '<span class="tb-stat-value">' + escapeHtml(String(value)) + '</span>' +
+      '</span>';
+  }
+
+  function renderAssigneeCard(name, tasks, extraCls) {
+    let h = '<div class="tb-card ' + (extraCls || '') + '">';
+    h += '<div class="tb-card-head">';
+    h += '<span class="tb-card-name">' + escapeHtml(name) + '</span>';
+    h += '<span class="tb-card-count">' + tasks.length + '</span>';
+    h += '</div>';
+    if (tasks.length === 0) {
+      h += '<div class="tb-card-empty">暂无令</div>';
+    } else {
+      h += '<ul class="tb-task-list">';
+      tasks.forEach(function (t) { h += renderTaskItem(t); });
+      h += '</ul>';
+    }
+    h += '</div>';
+    return h;
+  }
+
+  function renderTaskItem(t) {
+    const statusCls = statusToClass(t.status);
+    const priorityCls = 'tb-pri-' + (t.priority || 'P1').replace(/[^A-Z0-9]/gi, '').slice(0, 2) || 'tb-pri-P1';
+    let h = '<li class="tb-task ' + statusCls + '">';
+    h += '<div class="tb-task-top">';
+    h += '<span class="tb-task-id">' + escapeHtml(t.id) + '</span>';
+    if (t.type) h += '<span class="tb-task-type">[' + escapeHtml(t.type) + ']</span>';
+    h += '<span class="tb-task-pri ' + priorityCls + '">' + escapeHtml(stripPriority(t.priority)) + '</span>';
+    h += '</div>';
+    h += '<div class="tb-task-title">' + escapeHtml(t.title) + '</div>';
+    const metaBits = [];
+    if (t.status) metaBits.push(escapeHtml(t.status));
+    if (t.dependency && t.dependency !== '无') metaBits.push('依赖 ' + escapeHtml(t.dependency));
+    if (t.relation && t.relation !== '无') metaBits.push(escapeHtml(t.relation));
+    if (metaBits.length) h += '<div class="tb-task-meta">' + metaBits.join(' · ') + '</div>';
+    h += '</li>';
+    return h;
+  }
+
+  function statusToClass(status) {
+    if (!status) return '';
+    if (status.indexOf('🟢') !== -1) return 'tb-status-done';
+    if (status.indexOf('🟡') !== -1) return 'tb-status-progress';
+    if (status.indexOf('🔴') !== -1) return 'tb-status-open';
+    return '';
+  }
+
+  function stripPriority(p) {
+    const m = (p || '').match(/P\d/);
+    return m ? m[0] : (p || '');
   }
 })();

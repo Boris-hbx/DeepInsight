@@ -305,7 +305,7 @@
   <h1>DeepInsight 项目初始化草稿</h1>
   <div class="meta">
     <span class="badge">草稿 / 待评审</span>
-    <span>作者：Boris + Claude</span>
+    <span>作者：阿宝 + Claude</span>
     <span>最后更新：2026-04-23</span>
   </div>
   <p class="lead">这是初始化方案的讨论稿，评审通过后才执行实施。每一轮修改都在这里留痕，方便 8 人达成共识。</p>
@@ -381,8 +381,8 @@
 
 <h3 id="sec-1-5">1.5 Git 身份<a href="#sec-1-5" class="anchor">#</a></h3>
 <ul>
-  <li>团队每人使用自己的 GitHub 账号邮箱（Boris 的是 <code>baoxing2391@163.com</code>）</li>
-  <li><strong>待确认：</strong> Boris 当前 shell 中 git global 为空，需本地配一次 <code>git config --global user.email ...</code>；或者 Claude 代为设置（方式待定）</li>
+  <li>团队每人使用自己的 GitHub 账号邮箱（阿宝的是 <code>baoxing2391@163.com</code>）</li>
+  <li><strong>待确认：</strong> 阿宝当前 shell 中 git global 为空，需本地配一次 <code>git config --global user.email ...</code>；或者 Claude 代为设置（方式待定）</li>
 </ul>
 
 <h3 id="sec-1-6">1.6 项目运作看板<a href="#sec-1-6" class="anchor">#</a></h3>
@@ -591,7 +591,7 @@
 
 <h2 id="sec-6">6. 开放问题<a href="#sec-6" class="anchor">#</a></h2>
 <ol>
-  <li><strong>Git 身份处理</strong>：Boris 自己执行 <code>git config --global</code>，还是 Claude 代设？</li>
+  <li><strong>Git 身份处理</strong>：阿宝自己执行 <code>git config --global</code>，还是 Claude 代设？</li>
   <li><strong>第一个垂直切片</strong>选什么？建议是"上传 PDF → 摘要"最简化路径，你们怎么看？</li>
   <li><strong>CI 提供商</strong>：GitHub Actions（默认）？要不要同时接本地 pre-commit hook？</li>
   <li><strong>8 人的身份</strong>：需不需要一份 <code>docs/guides/TEAM.md</code> 记录每人背景与关注方向，方便 agent 在评审时引用？</li>
@@ -610,7 +610,7 @@
 
 <h2 id="sec-7">7. 变更日志<a href="#sec-7" class="anchor">#</a></h2>
 <ul>
-  <li>2026-04-23 初稿（Boris + Claude 对话 1~4 轮结果沉淀）</li>
+  <li>2026-04-23 初稿（阿宝 + Claude 对话 1~4 轮结果沉淀）</li>
   <li>2026-04-23 补充第 4 节"业界最佳实践"（agent 联网调研）</li>
   <li>2026-04-23 新增第 5 节"体验方式与部署（前期简化版）"：确认 MVP 阶段纯本地开发，API key 每人自用，部署/登录/团队 billing 推迟</li>
   <li>2026-04-23 新增 1.6 "项目运作看板"：markdown 驱动的静态看板 + GitHub Pages；部署<strong>改用 <code>gh-pages</code> 分支</strong>（避免与 <code>/docs</code> 开发文档目录冲突 —— 修正上一轮建议）；目录规范新增 <code>dashboard/</code>、<code>scripts/</code>、<code>package.json</code>；实施步骤重组为 A/B 两条并行线；第 5 节区分"应用本体"与"运作看板"的部署策略</li>

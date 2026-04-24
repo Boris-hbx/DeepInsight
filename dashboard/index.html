@@ -13,7 +13,7 @@
     <div class="hero-inner">
       <div class="hero-left">
         <h1>DeepInsight</h1>
-        <span class="tagline">项目运作看板 <span class="ver" id="version-tag"></span></span>
+        <span class="tagline">运作看板 <span class="ver" id="version-tag"></span></span>
       </div>
       <div class="hero-right">
         <span class="badge" id="updated-at">—</span>
@@ -24,6 +24,7 @@
 
   <nav class="tabs" role="tablist">
     <a href="#manual" class="tab active" data-tab="manual">运作手册</a>
+    <a href="#taskboard" class="tab" data-tab="taskboard">任务看板</a>
     <a href="#slices" class="tab" data-tab="slices">切片墙</a>
     <a href="#agents" class="tab" data-tab="agents">Agent 协作度</a>
     <a href="#adr" class="tab" data-tab="adr">ADR 索引</a>
@@ -34,6 +35,9 @@
 <main>
   <section id="manual" class="panel active">
     <div class="panel-body" id="manual-body"></div>
+  </section>
+  <section id="taskboard" class="panel">
+    <div class="panel-body taskboard-body" id="taskboard-body"></div>
   </section>
   <section id="slices" class="panel">
     <div class="panel-body placeholder" id="slices-body"></div>
