@@ -1,0 +1,14 @@
+{
+  "name": "deepinsight-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DeepInsight 项目运作看板（轨道 B）",
+  "scripts": {
+    "build": "node scripts/build-dashboard.js",
+    "deploy": "npm run build && gh-pages -d dist -b gh-pages -m \"deploy: dashboard $(node -e \\\"process.stdout.write(new Date().toISOString().slice(0,10))\\\")\""
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0",
+    "marked": "^14.1.3"
+  }
+}
