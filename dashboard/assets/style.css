@@ -98,12 +98,21 @@ pre code { background: none; padding: 0; color: var(--text); }
   margin: 0;
   font-size: 22px;
   font-weight: 700;
-  letter-spacing: -0.01em;
-  background: linear-gradient(90deg, var(--accent) 0%, #f2a57b 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  letter-spacing: -0.02em;
+  color: var(--text);
   line-height: 1.2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hero h1::before {
+  content: '';
+  width: 22px;
+  height: 22px;
+  background: linear-gradient(135deg, var(--accent), #f2a57b);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(224, 118, 58, 0.4);
+  flex-shrink: 0;
 }
 .hero .tagline {
   display: inline-flex;
@@ -172,6 +181,13 @@ pre code { background: none; padding: 0; color: var(--text); }
 .tab.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
+  border-bottom-width: 3px;
+  margin-bottom: -1px;
+}
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 4px;
 }
 
 /* Main */
@@ -189,6 +205,43 @@ body.ins-wide { --main-width: 1180px; }
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 32px 40px;
+}
+/* 文档型 panel 用稍亮 bg，长文阅读更舒适 */
+#manual .panel-body {
+  background: #1a1d28;
+}
+
+/* 全局通用：链接 / 按钮 / 卡片的 focus 可见 */
+a:focus-visible,
+.btn:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 卡片通用 hover 反馈：微抬升 + 阴影 + 边框点亮 */
+.tb-card,
+.sw-card,
+.ex-card,
+.adr-item,
+.skill-item {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.tb-card:hover,
+.sw-card:hover,
+.ex-card:hover,
+.adr-item:hover,
+.skill-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  border-color: rgba(224, 118, 58, 0.35);
+}
+/* pending 状态卡片不需要这么"活泼" */
+.tb-card.tb-card-unassigned:hover,
+.ex-card.ex-pending:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
 }
 
 /* Markdown-rendered content inside manual panel */
