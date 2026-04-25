@@ -28,7 +28,7 @@ DeepInsight 是 8 人协作项目，前期会在数周内集中产生大量架�
    - 跨模块的技术选型（DB / RPC / 核心框架）
    - 影响长期演进的约定（API 风格、错误处理模式、观测规范）
    - 改变既有 ADR（新 ADR 需 `Supersedes: NNNN` 指向旧的）
-6. **ADR ≠ Spec ≠ RFC**（见草稿 § 4.3）：
+6. **ADR ≠ Spec ≠ RFC**（见章程 § 4.3）：
    - **RFC**：回答"要不要做、怎么做"（可选，8 人团队门槛下调）
    - **Spec**：回答"要做什么、怎么验收"（每个特性一个）
    - **ADR**：回答"为什么选了这条路"（单个决策点，短小）
@@ -52,4 +52,4 @@ DeepInsight 是 8 人协作项目，前期会在数周内集中产生大量架�
 
 - [Documenting Architecture Decisions — Michael Nygard](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions)
 - [ADR GitHub org](https://adr.github.io/)
-- `项目初始化草稿.md` § 4.3
+- `项目章程.md` § 4.3

@@ -9,7 +9,7 @@
 | 资源 | 地址 |
 |---|---|
 | 运作看板（实时） | https://boris-hbx.github.io/DeepInsight/ |
-| 初始化草稿 / 决策说明 | [`项目初始化草稿.md`](./项目初始化草稿.md) · [HTML 版](./项目初始化草稿.html) |
+| 初始化草稿 / 决策说明 | [`项目章程.md`](./项目章程.md) · [HTML 版](./项目章程.html) |
 | 任务令板 | [`docs/task-board.md`](./docs/task-board.md) |
 | 贡献指南 | [`docs/guides/CONTRIBUTING.md`](./docs/guides/CONTRIBUTING.md) |
 | Spec 模板 | [`docs/specs/TEMPLATE.md`](./docs/specs/TEMPLATE.md) |
@@ -30,7 +30,7 @@ npm run deploy       # 推到 gh-pages 分支（自动发布）
 
 ### 应用本体（`/web`）
 
-尚未脚手架化（轨道 A2，见 [草稿 § 3](./项目初始化草稿.md)）。目标栈：
+尚未脚手架化（轨道 A2，见 [章程 § 3](./项目章程.md)）。目标栈：
 
 **Next.js (App Router) + TypeScript + Tailwind CSS + shadcn/ui + Anthropic TS SDK**
 

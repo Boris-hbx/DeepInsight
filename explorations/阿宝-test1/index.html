@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Harness 的解剖 · DeepInsight</title>
+<style>
+  :root {
+    --bg:        #ffffff;
+    --bg-elev:   #fafafa;
+    --bg-soft:   #f5f5f7;
+    --ink:       #0a0a0b;
+    --ink-2:     #18181b;
+    --ink-3:     #3f3f46;
+    --muted:     #71717a;
+    --muted-2:   #a1a1aa;
+    --line:      #e4e4e7;
+    --line-soft: #f1f1f4;
+    --brand:     #5b5bf5;
+    --brand-2:   #7c3aed;
+    --brand-soft:#eef0ff;
+    --amber:     #f59e0b;
+    --amber-soft:#fef3c7;
+    --good:      #059669;
+    --good-soft: #d1fae5;
+    --warn:      #d97706;
+    --warn-soft: #ffedd5;
+    --bad:       #dc2626;
+    --bad-soft:  #fee2e2;
+    --shadow-sm: 0 1px 2px rgba(10,10,11,.04);
+    --shadow:    0 4px 24px -8px rgba(10,10,11,.08), 0 1px 2px rgba(10,10,11,.04);
+    --shadow-lg: 0 24px 48px -16px rgba(10,10,11,.16), 0 4px 12px -4px rgba(10,10,11,.06);
+    --radius:    10px;
+    --radius-lg: 16px;
+  }
+  html[data-theme="dark"] {
+    --bg:        #0a0a0c;
+    --bg-elev:   #111114;
+    --bg-soft:   #18181d;
+    --ink:       #fafafa;
+    --ink-2:     #ededed;
+    --ink-3:     #c4c4c8;
+    --muted:     #8a8a92;
+    --muted-2:   #5b5b63;
+    --line:      #27272d;
+    --line-soft: #1c1c21;
+    --brand:     #818cf8;
+    --brand-2:   #a78bfa;
+    --brand-soft:#1c1d35;
+    --amber:     #fbbf24;
+    --amber-soft:#3a2a0a;
+    --good:      #34d399;
+    --good-soft: #0c2a1f;
+    --warn:      #fbbf24;
+    --warn-soft: #2a1d05;
+    --bad:       #f87171;
+    --bad-soft:  #2c1212;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+    --shadow:    0 4px 24px -8px rgba(0,0,0,.6), 0 1px 2px rgba(0,0,0,.4);
+    --shadow-lg: 0 24px 48px -16px rgba(0,0,0,.8), 0 4px 12px -4px rgba(0,0,0,.4);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    transition: background-color .25s, color .25s;
+  }
+  code, pre, .mono {
+    font-family: "SF Mono", "JetBrains Mono", Consolas, "Liberation Mono", monospace;
+    font-size: 0.88em;
+  }
+  ::selection { background: var(--brand); color: #fff; }
+
+  /* ======================== Reading progress bar ======================== */
+  .progress {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: 2px; z-index: 100;
+    background: transparent;
+  }
+  .progress > span {
+    display: block; height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--brand), var(--brand-2));
+    transition: width .08s linear;
+  }
+
+  /* ======================== Top nav ======================== */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: color-mix(in srgb, var(--bg) 86%, transparent);
+    backdrop-filter: saturate(160%) blur(10px);
+    -webkit-backdrop-filter: saturate(160%) blur(10px);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .nav-inner {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 12px 28px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .brand-mark {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-weight: 600; font-size: 14px; color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .brand-dot {
+    width: 18px; height: 18px; border-radius: 5px;
+    background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+    box-shadow: 0 1px 6px color-mix(in srgb, var(--brand) 40%, transparent);
+  }
+  .nav .spacer { flex: 1; }
+  .nav-link {
+    color: var(--muted); text-decoration: none; font-size: 13px;
+    padding: 6px 10px; border-radius: 6px;
+  }
+  .nav-link:hover { color: var(--ink); background: var(--bg-soft); }
+  .icon-btn {
+    width: 32px; height: 32px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); background: var(--bg);
+    border-radius: 8px; color: var(--ink-3); cursor: pointer;
+    transition: background .12s, color .12s, border-color .12s;
+  }
+  .icon-btn:hover { background: var(--bg-soft); color: var(--ink); border-color: var(--ink-3); }
+  .icon-btn svg { width: 16px; height: 16px; }
+  .icon-btn .sun  { display: none; }
+  html[data-theme="dark"] .icon-btn .moon { display: none; }
+  html[data-theme="dark"] .icon-btn .sun  { display: inline; }
+
+  /* ======================== Hero ======================== */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    border-bottom: 1px solid var(--line);
+  }
+  .hero::before {
+    content: "";
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(700px 300px at 15% -10%, color-mix(in srgb, var(--brand) 20%, transparent), transparent 60%),
+      radial-gradient(600px 300px at 90% -20%, color-mix(in srgb, var(--brand-2) 18%, transparent), transparent 60%);
+    pointer-events: none;
+  }
+  .hero::after {
+    content: "";
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(var(--line-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(800px 400px at 50% 0%, #000 0%, transparent 70%);
+    -webkit-mask-image: radial-gradient(800px 400px at 50% 0%, #000 0%, transparent 70%);
+    opacity: .6;
+    pointer-events: none;
+  }
+  .hero-inner {
+    position: relative;
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 80px 28px 56px;
+  }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 4px 10px;
+    background: var(--brand-soft);
+    color: var(--brand);
+    border: 1px solid color-mix(in srgb, var(--brand) 24%, transparent);
+    border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+    letter-spacing: 0.02em;
+    margin-bottom: 24px;
+  }
+  .eyebrow .pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--brand);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 50%, transparent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 50%, transparent); }
+    70%  { box-shadow: 0 0 0 8px color-mix(in srgb, var(--brand) 0%, transparent); }
+    100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 0%, transparent); }
+  }
+  .hero h1 {
+    margin: 0 0 16px;
+    font-size: clamp(34px, 5vw, 56px);
+    line-height: 1.05;
+    letter-spacing: -0.025em;
+    font-weight: 700;
+    color: var(--ink);
+    max-width: 880px;
+  }
+  .hero h1 .accent {
+    background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero .lede {
+    font-size: 18px;
+    color: var(--ink-3);
+    max-width: 720px;
+    line-height: 1.55;
+    margin: 0 0 36px;
+  }
+  .hero-meta {
+    display: flex; flex-wrap: wrap; gap: 20px;
+    color: var(--muted); font-size: 13px;
+    border-top: 1px solid var(--line-soft);
+    padding-top: 20px;
+    margin-top: 8px;
+  }
+  .hero-meta b { color: var(--ink-2); font-weight: 600; }
+
+  /* ======================== Stats band ======================== */
+  .stats-band {
+    max-width: 1320px;
+    margin: -36px auto 0;
+    padding: 0 28px;
+    position: relative;
+    z-index: 2;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .stat {
+    padding: 22px 24px;
+    border-right: 1px solid var(--line-soft);
+  }
+  .stat:last-child { border-right: 0; }
+  .stat .k {
+    font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted);
+    font-weight: 600;
+  }
+  .stat .v {
+    margin-top: 8px;
+    font-size: 32px; font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    line-height: 1;
+  }
+  .stat .v sup {
+    font-size: 14px; color: var(--muted);
+    margin-left: 4px; font-weight: 500;
+  }
+  .stat .sub {
+    margin-top: 4px;
+    font-size: 12px; color: var(--muted);
+  }
+  @media (max-width: 760px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .stat:nth-child(2) { border-right: 0; }
+    .stat:nth-child(1), .stat:nth-child(2) { border-bottom: 1px solid var(--line-soft); }
+  }
+
+  /* ======================== Layout ======================== */
+  .layout {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 56px 28px 24px;
+    display: grid;
+    grid-template-columns: 220px minmax(0,1fr) 280px;
+    gap: 56px;
+  }
+  @media (max-width: 1100px) {
+    .layout { grid-template-columns: 200px 1fr; }
+    .meta-rail { display: none; }
+  }
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; gap: 0; padding: 32px 20px; }
+    .toc-rail { display: none; }
+  }
+
+  /* ======================== TOC ======================== */
+  .toc-rail {
+    position: sticky; top: 80px;
+    align-self: start;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+  }
+  .toc-rail h6 {
+    margin: 0 0 12px;
+    font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted);
+    font-weight: 600;
+  }
+  .toc-rail ol { list-style: none; padding: 0; margin: 0; counter-reset: toc; }
+  .toc-rail li { counter-increment: toc; }
+  .toc-rail a {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 13px;
+    line-height: 1.3;
+    transition: color .12s, background .12s;
+  }
+  .toc-rail a::before {
+    content: counter(toc, decimal-leading-zero);
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 10px;
+    color: var(--muted-2);
+    width: 18px;
+  }
+  .toc-rail a:hover { color: var(--ink); background: var(--bg-soft); }
+  .toc-rail a.active {
+    color: var(--brand);
+    background: var(--brand-soft);
+  }
+  .toc-rail a.active::before { color: var(--brand); }
+
+  /* ======================== Main ======================== */
+  main { min-width: 0; }
+  section { scroll-margin-top: 80px; padding-top: 16px; }
+  section + section { margin-top: 64px; }
+
+  .sec-head {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 16px;
+    align-items: baseline;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .sec-head .num {
+    font-family: "SF Mono", Consolas, monospace;
+    color: var(--muted-2);
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    padding-top: 8px;
+  }
+  .sec-head h2 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.018em;
+    line-height: 1.2;
+  }
+  .sec-head .desc {
+    grid-column: 2;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  main h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 36px 0 12px;
+    letter-spacing: -0.005em;
+  }
+  main p { margin: 0 0 14px; color: var(--ink-3); }
+  main ul, main ol { padding-left: 22px; margin: 0 0 14px; color: var(--ink-3); }
+  main li { margin: 4px 0; }
+  main strong { color: var(--ink); font-weight: 600; }
+  main code {
+    background: var(--bg-soft);
+    border: 1px solid var(--line-soft);
+    padding: 1px 6px;
+    border-radius: 5px;
+    color: var(--ink-2);
+    font-size: 0.85em;
+  }
+  main a { color: var(--brand); text-decoration: none; }
+  main a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  mark { background: var(--amber-soft); padding: 1px 5px; border-radius: 4px; color: var(--ink); }
+
+  .lead {
+    font-size: 17px;
+    color: var(--ink-2);
+    line-height: 1.6;
+  }
+
+  /* ======================== TL;DR ======================== */
+  .tldr {
+    position: relative;
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 28px 32px;
+    margin-top: 24px;
+    overflow: hidden;
+  }
+  .tldr::before {
+    content: "";
+    position: absolute; top: 0; left: 0; bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--brand), var(--brand-2));
+  }
+  .tldr h4 {
+    margin: 0 0 16px;
+    font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--brand);
+    font-weight: 700;
+  }
+  .tldr ol {
+    counter-reset: tldr;
+    list-style: none;
+    padding: 0; margin: 0;
+  }
+  .tldr li {
+    counter-increment: tldr;
+    position: relative;
+    padding: 10px 0 10px 40px;
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.55;
+    border-top: 1px solid var(--line-soft);
+  }
+  .tldr li:first-child { border-top: 0; }
+  .tldr li::before {
+    content: counter(tldr, decimal-leading-zero);
+    position: absolute; left: 0; top: 12px;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--brand);
+    background: var(--brand-soft);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  /* ======================== Component cards ======================== */
+  .components {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .comp {
+    position: relative;
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s;
+    overflow: hidden;
+  }
+  .comp::after {
+    content: "";
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 6%, transparent), transparent 40%);
+    opacity: 0; transition: opacity .18s;
+  }
+  .comp:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow);
+    border-color: color-mix(in srgb, var(--brand) 30%, var(--line));
+  }
+  .comp:hover::after { opacity: 1; }
+  .comp .icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    background: var(--brand-soft);
+    color: var(--brand);
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-bottom: 12px;
+  }
+  .comp .icon svg { width: 18px; height: 18px; }
+  .comp .num {
+    font-family: "SF Mono", Consolas, monospace;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600; letter-spacing: 0.06em;
+  }
+  .comp h4 {
+    margin: 4px 0 8px;
+    font-size: 16px; font-weight: 600;
+    color: var(--ink);
+  }
+  .comp p {
+    margin: 0 0 12px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+  .comp .tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .comp .tag {
+    font-size: 10.5px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line-soft);
+    color: var(--muted);
+    font-family: "SF Mono", Consolas, monospace;
+  }
+
+  /* ======================== Pull quote ======================== */
+  blockquote.pull {
+    margin: 28px 0;
+    padding: 20px 24px 20px 28px;
+    background: var(--bg-elev);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--brand);
+    font-size: 17px;
+    color: var(--ink);
+    line-height: 1.55;
+    font-style: normal;
+  }
+  blockquote.pull .src {
+    display: block;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+
+  /* ======================== Charts ======================== */
+  .chart-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 24px 24px 20px;
+    margin: 20px 0;
+  }
+  .chart-card .cap {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .chart-card .title {
+    font-size: 15px; font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 18px;
+  }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 16px; font-size: 12px; color: var(--muted); }
+  .legend i {
+    display: inline-block; width: 10px; height: 10px;
+    border-radius: 3px; margin-right: 6px; vertical-align: -1px;
+  }
+
+  /* ============ Comparison table ============ */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg-elev);
+    margin: 20px 0;
+  }
+  table.cmp {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  table.cmp th, table.cmp td {
+    padding: 13px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: top;
+  }
+  table.cmp th {
+    background: var(--bg-soft);
+    font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--muted); white-space: nowrap;
+  }
+  table.cmp tr:last-child td { border-bottom: 0; }
+  table.cmp tr:hover td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
+  table.cmp td:first-child { font-weight: 600; color: var(--ink); white-space: nowrap; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600;
+  }
+  .pill.good { background: var(--good-soft); color: var(--good); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.bad  { background: var(--bad-soft);  color: var(--bad); }
+  .pill.neut { background: var(--bg-soft);   color: var(--muted); }
+
+  /* ============ Heatmap matrix ============ */
+  .matrix {
+    display: grid;
+    grid-template-columns: 150px repeat(5, 1fr);
+    gap: 4px;
+  }
+  .matrix > div {
+    padding: 12px 10px;
+    font-size: 12px;
+    border-radius: 6px;
+    text-align: center;
+  }
+  .matrix .head {
+    color: var(--muted); font-weight: 600;
+    font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: transparent;
+  }
+  .matrix .row-h {
+    background: transparent;
+    color: var(--ink); font-weight: 600;
+    text-align: left; font-size: 13px;
+  }
+  .matrix .cell { font-weight: 700; color: #fff; position: relative; }
+  .matrix .cell .score { font-size: 13px; }
+  .matrix .cell .nope { font-size: 14px; color: var(--muted-2); }
+  .lvl-5 { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); }
+  .lvl-4 { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); }
+  .lvl-3 { background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%); }
+  .lvl-2 { background: linear-gradient(135deg, #c7d2fe 0%, #ddd6fe 100%); color: #4338ca !important; }
+  .lvl-1 { background: var(--bg-soft); color: var(--muted) !important; border: 1px solid var(--line); }
+  .lvl-0 { background: transparent; color: var(--muted-2) !important; border: 1px dashed var(--line); }
+
+  /* ======================== Anti-pattern ======================== */
+  .anti-list { display: flex; flex-direction: column; gap: 8px; margin: 20px 0; }
+  .anti {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 16px;
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    transition: border-color .15s, transform .15s;
+  }
+  .anti:hover {
+    border-color: color-mix(in srgb, var(--bad) 40%, var(--line));
+    transform: translateX(2px);
+  }
+  .anti .id {
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 18px; font-weight: 700;
+    color: var(--bad);
+    background: var(--bad-soft);
+    border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 36px;
+  }
+  .anti h4 { margin: 0 0 4px; font-size: 15px; color: var(--ink); }
+  .anti .symptom {
+    color: var(--muted); font-size: 13px; margin: 0 0 6px; font-style: italic;
+  }
+  .anti .fix {
+    color: var(--ink-3); font-size: 13.5px; margin: 0;
+  }
+  .anti .fix b { color: var(--good); font-weight: 600; }
+
+  /* ======================== Implications ======================== */
+  .imp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+    margin: 20px 0;
+  }
+  .imp {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    border-left: 3px solid var(--good);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .imp:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+  .imp .lab {
+    font-size: 11px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--good);
+    font-weight: 700; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .imp .lab svg { width: 12px; height: 12px; }
+  .imp h4 { margin: 4px 0 6px; font-size: 15px; color: var(--ink); font-weight: 600; }
+  .imp p { margin: 0; font-size: 13.5px; color: var(--muted); line-height: 1.55; }
+
+  /* ======================== Open question ======================== */
+  .oq {
+    display: grid; grid-template-columns: 28px 1fr; gap: 14px;
+    padding: 14px 18px;
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    margin: 8px 0;
+    transition: border-color .15s;
+  }
+  .oq:hover { border-color: var(--brand); }
+  .oq .qmark {
+    width: 24px; height: 24px;
+    border-radius: 6px;
+    background: var(--brand-soft);
+    color: var(--brand);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+    margin-top: 1px;
+  }
+  .oq .q { font-weight: 600; color: var(--ink); font-size: 14px; }
+  .oq .why { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+  /* ======================== Sources ======================== */
+  .sources {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 10px;
+    margin: 20px 0;
+  }
+  .src-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    transition: transform .15s, box-shadow .15s, border-color .15s;
+    cursor: default;
+  }
+  .src-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+    border-color: var(--brand);
+  }
+  .src-card .num {
+    display: inline-block;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 10.5px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line-soft);
+    color: var(--muted);
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .src-card .title {
+    font-weight: 600; margin: 8px 0 4px; color: var(--ink);
+    font-size: 13.5px; line-height: 1.4;
+  }
+  .src-card .src {
+    color: var(--muted); font-size: 12px;
+  }
+  .src-card .url {
+    color: var(--brand);
+    font-size: 11px;
+    word-break: break-all;
+    margin-top: 6px;
+    display: block;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+
+  /* ======================== Meta rail ======================== */
+  .meta-rail {
+    position: sticky; top: 80px;
+    align-self: start;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .meta-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+  .meta-card h6 {
+    margin: 0 0 12px;
+    font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+    font-weight: 600;
+  }
+  .kv { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-top: 1px solid var(--line-soft); }
+  .kv:first-of-type { border-top: 0; padding-top: 0; }
+  .kv .k { color: var(--muted); }
+  .kv .v { color: var(--ink); font-weight: 500; }
+  .conf {
+    margin-top: 8px;
+    height: 6px; background: var(--bg-soft); border-radius: 3px; overflow: hidden;
+  }
+  .conf > span {
+    display: block; height: 100%;
+    background: linear-gradient(90deg, var(--brand), var(--brand-2));
+  }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip {
+    font-size: 11px; padding: 3px 8px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line-soft);
+    color: var(--ink-3);
+    border-radius: 999px;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+
+  /* ======================== Footer ======================== */
+  footer {
+    border-top: 1px solid var(--line);
+    margin-top: 64px;
+    padding: 32px 0 80px;
+    background: var(--bg-elev);
+  }
+  .footer-inner {
+    max-width: 1320px; margin: 0 auto; padding: 0 28px;
+    display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 32px;
+    font-size: 13px; color: var(--muted);
+  }
+  @media (max-width: 760px) { .footer-inner { grid-template-columns: 1fr; } }
+  footer h6 { margin: 0 0 10px; font-size: 12px; color: var(--ink); font-weight: 600; }
+  footer .col p { margin: 0 0 8px; }
+  footer .disclaimer { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
+
+<!-- =================== Top nav =================== -->
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand-mark" href="#top">
+      <span class="brand-dot"></span>
+      DeepInsight
+      <span style="color:var(--muted-2); font-weight:400; margin-left:4px;">/ report</span>
+    </a>
+    <span class="spacer"></span>
+    <a class="nav-link" href="#refs">来源</a>
+    <a class="nav-link" href="#imply">启示</a>
+    <button class="icon-btn" id="theme-toggle" aria-label="切换主题">
+      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="sun"  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- =================== Hero =================== -->
+<section class="hero" id="top">
+  <div class="hero-inner">
+    <span class="eyebrow"><span class="pulse"></span>DeepInsight Report · v0.1 demo</span>
+    <h1>Agent Harness 的<br><span class="accent">解剖</span> —— 模型外面那层"壳"在做什么</h1>
+    <p class="lede">
+      Claude Code、Cursor、Aider、Codex CLI ⋯ 这些 agent 之间真正的差异点不是模型权重，而是夹在模型与 IDE / 终端之间的<strong style="color:var(--ink);">那层薄运行时</strong>。这份报告把它拆成 5 个组件、5 种实现、5 个反模式，并归纳对 DeepInsight 自身设计的 4 条启示。
+    </p>
+    <div class="hero-meta">
+      <span><b>主题</b> · agent-runtime</span>
+      <span><b>输入</b> · 7 份资料</span>
+      <span><b>生成</b> · 2026-04-25 14:32</span>
+      <span><b>作者</b> · 阿宝-test1</span>
+    </div>
+  </div>
+</section>
+
+<!-- =================== Stats band =================== -->
+<div class="stats-band">
+  <div class="stats-grid">
+    <div class="stat">
+      <div class="k">核心组件</div>
+      <div class="v">5<sup>个</sup></div>
+      <div class="sub">tool loop · context · hooks · skills · perms</div>
+    </div>
+    <div class="stat">
+      <div class="k">对照实现</div>
+      <div class="v">5<sup>家</sup></div>
+      <div class="sub">Claude Code / Cursor / Aider / Codex / Continue</div>
+    </div>
+    <div class="stat">
+      <div class="k">反模式</div>
+      <div class="v">5<sup>个</sup></div>
+      <div class="sub">stop guard · ctx 丢约束 · hook 误伤 ⋯</div>
+    </div>
+    <div class="stat">
+      <div class="k">置信度</div>
+      <div class="v">0.83</div>
+      <div class="sub">基于 7 份公开资料归纳 · mock</div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== Layout =================== -->
+<div class="layout">
+
+  <!-- TOC -->
+  <nav class="toc-rail" aria-label="目录">
+    <h6>目录</h6>
+    <ol>
+      <li><a href="#tldr">摘要 · TL;DR</a></li>
+      <li><a href="#what">何为 harness</a></li>
+      <li><a href="#five">五大组件</a></li>
+      <li><a href="#compare">主流实现对比</a></li>
+      <li><a href="#anti">反模式</a></li>
+      <li><a href="#imply">对 DeepInsight 的启示</a></li>
+      <li><a href="#open">开放问题</a></li>
+      <li><a href="#refs">来源</a></li>
+    </ol>
+  </nav>
+
+  <!-- Main -->
+  <main>
+
+    <!-- ====== 1. TL;DR ====== -->
+    <section id="tldr">
+      <div class="sec-head">
+        <span class="num">§ 01</span>
+        <h2>摘要</h2>
+        <p class="desc">三句话带走整份报告</p>
+      </div>
+      <p class="lead">"Harness" 不是模型，也不是 IDE 插件，而是夹在两者之间的<strong>一层薄运行时</strong>：决定模型能调什么工具、看到什么上下文、被允许做什么、什么时候停。模型权重一样的情况下，harness 决定它"好不好用"。</p>
+      <div class="tldr">
+        <h4>三句话带走</h4>
+        <ol>
+          <li><strong>Harness = 模型 × 工具循环 × 上下文 × 权限 × Skill。</strong>权重买的是"会不会"，harness 决定"做不做得好"。</li>
+          <li><strong>编辑策略（diff vs whole-file vs udiff）和上下文压缩，是当前各家最大的差异化战场。</strong>其他维度大家在收敛。</li>
+          <li><strong>Hooks + Skills 是新兴的"用户可编程层"。</strong>把 harness 从"框架内部参数"变成"产品交付物"。DeepInsight 自己也该有一层。</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ====== 2. 何为 harness ====== -->
+    <section id="what">
+      <div class="sec-head">
+        <span class="num">§ 02</span>
+        <h2>何为 harness</h2>
+        <p class="desc">从狭义到广义的边界划定</p>
+      </div>
+      <p>狭义：让 LLM 能调用工具、读写文件、与 shell 交互所必须的那段代码。广义：包括 prompt 模板、上下文管理、权限护栏、可观测、用户可扩展点 —— 所有让 raw model 变成"可用 agent"的机械装置。</p>
+      <p class="lead">一个最小 harness 至少包含：</p>
+      <ul>
+        <li>System prompt（角色、约束、风格）</li>
+        <li>Tool schema 注入 + tool-use 循环（直到模型说"完成"）</li>
+        <li>消息历史的<mark>截断 / 压缩 / 摘要</mark>策略</li>
+        <li>错误恢复（工具失败、token 超限、模型返回非法 JSON）</li>
+      </ul>
+      <p>"是否有 harness" 这个问题没意义 —— 任何能用的 agent 都有。真正的问题是：<strong>这一层做得多薄、还是多厚？暴露多少给用户调？</strong></p>
+      <blockquote class="pull">
+        如果你的 agent 跑 30 步还在轨道上，那不是模型聪明 —— 是 harness 在每一步都拦下了发散的可能。
+        <span class="src">— 改写自资料 [3]，工具循环设计</span>
+      </blockquote>
+    </section>
+
+    <!-- ====== 3. 五大组件 ====== -->
+    <section id="five">
+      <div class="sec-head">
+        <span class="num">§ 03</span>
+        <h2>五大组件</h2>
+        <p class="desc">把市面上能拿到 source 的 harness 放一起拆，反复出现的 5 块</p>
+      </div>
+
+      <div class="components">
+        <div class="comp">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></div>
+          <div class="num">01 · TOOL LOOP</div>
+          <h4>工具循环</h4>
+          <p>模型 → 工具调用 → 结果回灌 → 模型 → … 直到 stop_reason 为 end_turn。看似简单，魔鬼在终止判断、并行调用合并、错误回路上。</p>
+          <div class="tags"><span class="tag">stop_reason</span><span class="tag">parallel</span><span class="tag">retry</span></div>
+        </div>
+        <div class="comp">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg></div>
+          <div class="num">02 · CONTEXT MGR</div>
+          <h4>上下文管理</h4>
+          <p>历史消息怎么保留、何时压缩、压缩成什么样。主流：sliding window + 关键事件 pinned + 阶段性 summarize。1M token 不是免死金牌。</p>
+          <div class="tags"><span class="tag">window</span><span class="tag">summarize</span><span class="tag">cache</span></div>
+        </div>
+        <div class="comp">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+          <div class="num">03 · HOOKS</div>
+          <h4>Hooks（钩子）</h4>
+          <p>PreToolUse / PostToolUse / Stop / UserPromptSubmit 这类切面。harness 在固定生命周期点把控制权交回宿主，让"用户配的自动行为"成为可能。</p>
+          <div class="tags"><span class="tag">PreToolUse</span><span class="tag">deterministic</span></div>
+        </div>
+        <div class="comp">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+          <div class="num">04 · SKILLS / SUBAGENT</div>
+          <h4>Skill / Subagent 体系</h4>
+          <p>把"特定场景的最佳实践 prompt"和"独立上下文 + 工具子集的 agent"封装成一等公民。Skill 是规则集，Subagent 是隔离执行环境。</p>
+          <div class="tags"><span class="tag">routing</span><span class="tag">composition</span></div>
+        </div>
+        <div class="comp">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+          <div class="num">05 · PERMISSIONS</div>
+          <h4>权限 / 沙盒</h4>
+          <p>tool 是否需要确认、文件能不能写、shell 命令能不能跑、敏感目录禁触。从交互式 prompt 到 allowlist 配置到 hook 拦截，由浅入深三层。</p>
+          <div class="tags"><span class="tag">allowlist</span><span class="tag">sandbox</span></div>
+        </div>
+      </div>
+
+      <h3>组件之间的耦合</h3>
+      <p>真正难的是组件之间的<strong>串接</strong>：hook 拦下一次写入 → tool loop 要不要把这次失败计入 stop 条件？context manager 压缩历史 → skill 注入的指令被压没了怎么办？这些边角是各家 harness 真正的工程量。</p>
+    </section>
+
+    <!-- ====== 4. 主流实现对比 ====== -->
+    <section id="compare">
+      <div class="sec-head">
+        <span class="num">§ 04</span>
+        <h2>主流实现对比</h2>
+        <p class="desc">5 个能拿到代码或公开文档的 harness，按 5 维打分（mock 评分，仅作示意）</p>
+      </div>
+
+      <!-- Radar -->
+      <div class="chart-card">
+        <div class="cap"><span>FIGURE 1</span><span>RADAR · 5 dims</span></div>
+        <div class="title">多维能力雷达</div>
+        <svg viewBox="0 0 520 380" width="100%" style="max-width:600px; display:block; margin:0 auto;">
+          <defs>
+            <radialGradient id="g-cc" cx="50%" cy="50%" r="60%">
+              <stop offset="0%" stop-color="#5b5bf5" stop-opacity=".55"/>
+              <stop offset="100%" stop-color="#5b5bf5" stop-opacity=".12"/>
+            </radialGradient>
+            <radialGradient id="g-cur" cx="50%" cy="50%" r="60%">
+              <stop offset="0%" stop-color="#0891b2" stop-opacity=".40"/>
+              <stop offset="100%" stop-color="#0891b2" stop-opacity=".08"/>
+            </radialGradient>
+            <radialGradient id="g-aid" cx="50%" cy="50%" r="60%">
+              <stop offset="0%" stop-color="#f59e0b" stop-opacity=".30"/>
+              <stop offset="100%" stop-color="#f59e0b" stop-opacity=".06"/>
+            </radialGradient>
+          </defs>
+          <g transform="translate(260,200)">
+            <!-- grid pentagons -->
+            <g fill="none" stroke="currentColor" stroke-width="1" opacity=".10">
+              <polygon points="0,-150 142.7,-46.4 88.2,121.4 -88.2,121.4 -142.7,-46.4"/>
+              <polygon points="0,-120 114.1,-37.1 70.5,97.1 -70.5,97.1 -114.1,-37.1"/>
+              <polygon points="0,-90  85.6,-27.8 52.9,72.8 -52.9,72.8 -85.6,-27.8"/>
+              <polygon points="0,-60  57.1,-18.6 35.3,48.6 -35.3,48.6 -57.1,-18.6"/>
+              <polygon points="0,-30  28.5,-9.3  17.6,24.3 -17.6,24.3 -28.5,-9.3"/>
+            </g>
+            <g stroke="currentColor" stroke-width="1" opacity=".18">
+              <line x1="0" y1="0" x2="0"      y2="-150"/>
+              <line x1="0" y1="0" x2="142.7"  y2="-46.4"/>
+              <line x1="0" y1="0" x2="88.2"   y2="121.4"/>
+              <line x1="0" y1="0" x2="-88.2"  y2="121.4"/>
+              <line x1="0" y1="0" x2="-142.7" y2="-46.4"/>
+            </g>
+            <!-- axis labels -->
+            <g font-size="11.5" fill="currentColor" opacity=".7" text-anchor="middle" font-weight="500">
+              <text x="0"    y="-168">工具表达力</text>
+              <text x="172"  y="-50">上下文管理</text>
+              <text x="106"  y="142">用户可编程性</text>
+              <text x="-106" y="142">编辑策略</text>
+              <text x="-172" y="-50">权限可控性</text>
+            </g>
+            <!-- scale ticks -->
+            <g font-size="9" fill="currentColor" opacity=".4" text-anchor="middle">
+              <text x="6" y="-30">1</text>
+              <text x="6" y="-60">2</text>
+              <text x="6" y="-90">3</text>
+              <text x="6" y="-120">4</text>
+              <text x="6" y="-150">5</text>
+            </g>
+            <!-- Aider 3,3,2,5,3 -->
+            <polygon points="0,-90 85.6,-27.8 35.3,48.6 -88.2,121.4 -85.6,-27.8"
+                    fill="url(#g-aid)" stroke="#f59e0b" stroke-width="1.8"/>
+            <g fill="#f59e0b">
+              <circle cx="0"     cy="-90"   r="3"/>
+              <circle cx="85.6"  cy="-27.8" r="3"/>
+              <circle cx="35.3"  cy="48.6"  r="3"/>
+              <circle cx="-88.2" cy="121.4" r="3"/>
+              <circle cx="-85.6" cy="-27.8" r="3"/>
+            </g>
+            <!-- Cursor 4,4,2,5,3 -->
+            <polygon points="0,-120 114.1,-37.1 35.3,48.6 -88.2,121.4 -85.6,-27.8"
+                    fill="url(#g-cur)" stroke="#0891b2" stroke-width="1.8"/>
+            <g fill="#0891b2">
+              <circle cx="0"      cy="-120"  r="3"/>
+              <circle cx="114.1"  cy="-37.1" r="3"/>
+              <circle cx="35.3"   cy="48.6"  r="3"/>
+              <circle cx="-88.2"  cy="121.4" r="3"/>
+              <circle cx="-85.6"  cy="-27.8" r="3"/>
+            </g>
+            <!-- Claude Code 5,5,5,4,5 -->
+            <polygon points="0,-150 142.7,-46.4 88.2,121.4 -70.5,97.1 -142.7,-46.4"
+                    fill="url(#g-cc)" stroke="#5b5bf5" stroke-width="2"/>
+            <g fill="#5b5bf5">
+              <circle cx="0"      cy="-150"  r="3.5"/>
+              <circle cx="142.7"  cy="-46.4" r="3.5"/>
+              <circle cx="88.2"   cy="121.4" r="3.5"/>
+              <circle cx="-70.5"  cy="97.1"  r="3.5"/>
+              <circle cx="-142.7" cy="-46.4" r="3.5"/>
+            </g>
+          </g>
+        </svg>
+        <div class="legend">
+          <span><i style="background:#5b5bf5"></i>Claude Code</span>
+          <span><i style="background:#0891b2"></i>Cursor Composer</span>
+          <span><i style="background:#f59e0b"></i>Aider</span>
+        </div>
+      </div>
+
+      <!-- Comparison table -->
+      <h3>横向对照表</h3>
+      <div class="table-wrap">
+        <table class="cmp">
+          <thead>
+            <tr>
+              <th>Harness</th>
+              <th>编辑策略</th>
+              <th>上下文压缩</th>
+              <th>用户扩展点</th>
+              <th>权限模型</th>
+              <th>开源</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Claude Code</td>
+              <td>Edit / Write / NotebookEdit + 多工具</td>
+              <td><span class="pill good">自动 compact</span></td>
+              <td>Hooks · Skills · Subagents · MCP</td>
+              <td>三档 + allowlist</td>
+              <td><span class="pill warn">部分</span></td>
+            </tr>
+            <tr>
+              <td>Cursor Composer</td>
+              <td>多文件 diff + apply</td>
+              <td><span class="pill warn">手动 @-mention</span></td>
+              <td>.cursorrules · MCP</td>
+              <td>Auto-run + 命令 allowlist</td>
+              <td><span class="pill bad">否</span></td>
+            </tr>
+            <tr>
+              <td>Aider</td>
+              <td>SEARCH/REPLACE · udiff · whole</td>
+              <td><span class="pill warn">repo-map</span></td>
+              <td>CLI flags · /commands</td>
+              <td>shell 逐次确认</td>
+              <td><span class="pill good">Apache-2</span></td>
+            </tr>
+            <tr>
+              <td>Codex CLI</td>
+              <td>apply_patch 工具</td>
+              <td><span class="pill neut">基本无</span></td>
+              <td>config.toml · MCP</td>
+              <td>沙盒 + 网络隔离</td>
+              <td><span class="pill good">MIT</span></td>
+            </tr>
+            <tr>
+              <td>Continue</td>
+              <td>多模型 + 多策略可插拔</td>
+              <td><span class="pill warn">slash 触发</span></td>
+              <td>config.json · slash · context</td>
+              <td>IDE 内确认</td>
+              <td><span class="pill good">Apache-2</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Heatmap matrix -->
+      <h3>能力矩阵</h3>
+      <div class="chart-card">
+        <div class="cap"><span>FIGURE 2</span><span>HEATMAP · 5×5</span></div>
+        <div class="title">能力矩阵 · 1–5 渐变</div>
+        <div class="matrix">
+          <div class="head"></div>
+          <div class="head">Tool loop</div>
+          <div class="head">Context</div>
+          <div class="head">Hooks</div>
+          <div class="head">Skills</div>
+          <div class="head">Sandbox</div>
+
+          <div class="row-h">Claude Code</div>
+          <div class="cell lvl-5"><span class="score">5</span></div>
+          <div class="cell lvl-5"><span class="score">5</span></div>
+          <div class="cell lvl-5"><span class="score">5</span></div>
+          <div class="cell lvl-5"><span class="score">5</span></div>
+          <div class="cell lvl-3"><span class="score">3</span></div>
+
+          <div class="row-h">Cursor Composer</div>
+          <div class="cell lvl-4"><span class="score">4</span></div>
+          <div class="cell lvl-3"><span class="score">3</span></div>
+          <div class="cell lvl-2"><span class="score">2</span></div>
+          <div class="cell lvl-0"><span class="nope">—</span></div>
+          <div class="cell lvl-2"><span class="score">2</span></div>
+
+          <div class="row-h">Aider</div>
+          <div class="cell lvl-3"><span class="score">3</span></div>
+          <div class="cell lvl-3"><span class="score">3</span></div>
+          <div class="cell lvl-2"><span class="score">2</span></div>
+          <div class="cell lvl-0"><span class="nope">—</span></div>
+          <div class="cell lvl-2"><span class="score">2</span></div>
+
+          <div class="row-h">Codex CLI</div>
+          <div class="cell lvl-3"><span class="score">3</span></div>
+          <div class="cell lvl-1"><span class="score">1</span></div>
+          <div class="cell lvl-0"><span class="nope">—</span></div>
+          <div class="cell lvl-0"><span class="nope">—</span></div>
+          <div class="cell lvl-5"><span class="score">5</span></div>
+
+          <div class="row-h">Continue</div>
+          <div class="cell lvl-3"><span class="score">3</span></div>
+          <div class="cell lvl-2"><span class="score">2</span></div>
+          <div class="cell lvl-2"><span class="score">2</span></div>
+          <div class="cell lvl-0"><span class="nope">—</span></div>
+          <div class="cell lvl-2"><span class="score">2</span></div>
+        </div>
+      </div>
+
+      <p>核心观察：<strong>Hooks + Skills 把 Claude Code 拉开了一档</strong>，本质是把"用户可编程层"做厚了；其他家在编辑策略和沙盒上各有特点。</p>
+    </section>
+
+    <!-- ====== 5. 反模式 ====== -->
+    <section id="anti">
+      <div class="sec-head">
+        <span class="num">§ 05</span>
+        <h2>反模式</h2>
+        <p class="desc">从公开 issue 与故障 retro 里归纳的高频踩坑</p>
+      </div>
+      <div class="anti-list">
+        <div class="anti">
+          <div class="id">A1</div>
+          <div>
+            <h4>Tool loop 无 stop guard</h4>
+            <p class="symptom">"模型一直在调工具不肯停"</p>
+            <p class="fix">没有显式步数预算 + 进度判断，模型可能陷入"再 grep 一次"的死循环。<b>修复：</b>每 N 步注入"是否已收集到足够信息"的反思 prompt，或硬上限。</p>
+          </div>
+        </div>
+        <div class="anti">
+          <div class="id">A2</div>
+          <div>
+            <h4>上下文压缩丢约束</h4>
+            <p class="symptom">"summarize 后模型忘了 system prompt 说的事"</p>
+            <p class="fix">老消息被摘要后，关键约束（"不许动 /web"）被合并甚至省略。<b>修复：</b>把 system + 关键 rule 标 pinned，绝不参与压缩。</p>
+          </div>
+        </div>
+        <div class="anti">
+          <div class="id">A3</div>
+          <div>
+            <h4>Hook 误伤正常工作流</h4>
+            <p class="symptom">"白名单写错，连 README 都写不进去"</p>
+            <p class="fix">Hook 写得太严，每次都阻断；太松又拦不住真问题。<b>修复：</b>原则 = "宁漏判不误伤"，异常默认放行；stderr 给可执行的修正建议。</p>
+          </div>
+        </div>
+        <div class="anti">
+          <div class="id">A4</div>
+          <div>
+            <h4>Skill 套娃</h4>
+            <p class="symptom">"开了 12 个 skill，每次都被注入一大段，token 爆炸"</p>
+            <p class="fix">把"建议性提示"塞太多到 description。<b>修复：</b>skill 元信息只放路径 + 触发条件，正文懒加载（model 决定要读时再读）。</p>
+          </div>
+        </div>
+        <div class="anti">
+          <div class="id">A5</div>
+          <div>
+            <h4>隐式权限提升</h4>
+            <p class="symptom">"用户点同意一次 git push，agent 以为以后都能 push"</p>
+            <p class="fix">权限授予的<strong>作用域</strong>没讲清。<b>修复：</b>每次 risky 操作单独询问；记忆只保留"用户偏好节奏"而非"操作授权"。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== 6. 启示 ====== -->
+    <section id="imply">
+      <div class="sec-head">
+        <span class="num">§ 06</span>
+        <h2>对 DeepInsight 的启示</h2>
+        <p class="desc">放回我们自己项目语境，可行动的 4 条</p>
+      </div>
+      <div class="imp-grid">
+        <div class="imp">
+          <div class="lab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>启示 1</div>
+          <h4>我们也需要自己的 harness</h4>
+          <p>DeepInsight 的"分析洞察 agent"不是一次 prompt 调用 —— 拿到 PDF / 链接后要 chunk、要 retrieve、要画图、要留 citation。这一层就是我们自己的 harness。<strong>提前决定它的 5 大组件</strong>，比 UI 改 5 版更重要。</p>
+        </div>
+        <div class="imp">
+          <div class="lab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>启示 2</div>
+          <h4>把"看板 hooks"从插件做成产品</h4>
+          <p>探索期已经在用 PreToolUse hook（<code>check-explore-path.js</code>）守路径。这种"用户能改、AI 必须遵守"的层，未来要不要在 DeepInsight 主应用里也开放？值得一个 spec。</p>
+        </div>
+        <div class="imp">
+          <div class="lab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>启示 3</div>
+          <h4>最小可演示报告 = 这一份本身</h4>
+          <p>这份报告的呈现形态（左 TOC + 中正文 + 右元信息 + 雷达 + 矩阵 + 来源卡片）就是 DeepInsight 主应用第一个垂直切片可以瞄准的目标。沉到 <code>docs/specs/</code> 当 reference。</p>
+        </div>
+        <div class="imp">
+          <div class="lab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>启示 4</div>
+          <h4>Skill 库做精不做多</h4>
+          <p>反模式 A4 是真问题。<code>.claude/skills/</code> 应控制在 5–7 个高频，每个有清晰触发条件，正文懒加载，避免 description 过长。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== 7. 开放问题 ====== -->
+    <section id="open">
+      <div class="sec-head">
+        <span class="num">§ 07</span>
+        <h2>开放问题</h2>
+        <p class="desc">需要 ADR / spec 拍板的 4 条</p>
+      </div>
+      <div class="oq"><div class="qmark">?</div><div>
+        <div class="q">Q1 · 我们的 harness 要不要走 Subagent 路线？</div>
+        <div class="why">单一 long context vs. 多个隔离 subagent 是当前选择题。各有 tradeoff，需要 ADR 立场。</div>
+      </div></div>
+      <div class="oq"><div class="qmark">?</div><div>
+        <div class="q">Q2 · 报告输出是 HTML 静态、Markdown、还是结构化 JSON + 渲染层？</div>
+        <div class="why">影响下游 SEO / 收藏 / 分享形态，也影响离线/在线模式选择。</div>
+      </div></div>
+      <div class="oq"><div class="qmark">?</div><div>
+        <div class="q">Q3 · 引用追溯做到哪个粒度？</div>
+        <div class="why">句级 citation 工程量大、段级简单。MVP 先做哪一级？看用户认知阈值。</div>
+      </div></div>
+      <div class="oq"><div class="qmark">?</div><div>
+        <div class="q">Q4 · 探索期 hook 那一套，要不要做成产品级 plugin 让用户自带？</div>
+        <div class="why">"用户写规则、agent 守规则" 有差异化潜力，但 UI / 安全 / 性能成本未知。</div>
+      </div></div>
+    </section>
+
+    <!-- ====== 8. 来源 ====== -->
+    <section id="refs">
+      <div class="sec-head">
+        <span class="num">§ 08</span>
+        <h2>来源</h2>
+        <p class="desc">本次分析的输入资料（mock，但每条对应真实公开来源类别）</p>
+      </div>
+      <div class="sources">
+        <div class="src-card">
+          <span class="num">[1]</span>
+          <div class="title">Anthropic Engineering · Claude Code system design notes</div>
+          <div class="src">官方博客 · 2025-Q3</div>
+          <span class="url">eng.anthropic.com/...</span>
+        </div>
+        <div class="src-card">
+          <span class="num">[2]</span>
+          <div class="title">Aider docs — "Editing Strategies"</div>
+          <div class="src">aider.chat · 文档</div>
+          <span class="url">aider.chat/docs/...</span>
+        </div>
+        <div class="src-card">
+          <span class="num">[3]</span>
+          <div class="title">Cursor Composer — Mode Overview &amp; Auto-run</div>
+          <div class="src">docs.cursor.com</div>
+          <span class="url">docs.cursor.com/...</span>
+        </div>
+        <div class="src-card">
+          <span class="num">[4]</span>
+          <div class="title">openai/codex (GitHub README + design)</div>
+          <div class="src">GitHub repo</div>
+          <span class="url">github.com/openai/codex</span>
+        </div>
+        <div class="src-card">
+          <span class="num">[5]</span>
+          <div class="title">continuedev/continue — config &amp; extension points</div>
+          <div class="src">GitHub repo</div>
+          <span class="url">github.com/continuedev/continue</span>
+        </div>
+        <div class="src-card">
+          <span class="num">[6]</span>
+          <div class="title">"Why I Use Aider" / "Why I Use Cursor" — community posts</div>
+          <div class="src">合并自 dev.to / HackerNews 讨论</div>
+          <span class="url">multiple</span>
+        </div>
+        <div class="src-card">
+          <span class="num">[7]</span>
+          <div class="title">本仓 <code>项目章程.md</code> § 4 业界参考</div>
+          <div class="src">本地文件</div>
+          <span class="url">./项目章程.md</span>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Meta rail -->
+  <aside class="meta-rail" aria-label="生成元信息">
+    <div class="meta-card">
+      <h6>报告元信息</h6>
+      <div class="kv"><span class="k">输入资料</span><span class="v">7 份</span></div>
+      <div class="kv"><span class="k">输入 tokens</span><span class="v">18,432</span></div>
+      <div class="kv"><span class="k">输出 tokens</span><span class="v">4,217</span></div>
+      <div class="kv"><span class="k">生成耗时</span><span class="v">42.8 s</span></div>
+      <div class="kv"><span class="k">模型</span><span class="v">claude-opus-4-7</span></div>
+      <div class="kv" style="display:block;">
+        <span class="k">置信度</span> <span class="v" style="float:right;">0.83</span>
+        <div class="conf"><span style="width:83%"></span></div>
+      </div>
+    </div>
+    <div class="meta-card">
+      <h6>关键概念</h6>
+      <div class="chip-row">
+        <span class="chip">tool loop</span>
+        <span class="chip">context</span>
+        <span class="chip">hooks</span>
+        <span class="chip">skills</span>
+        <span class="chip">subagent</span>
+        <span class="chip">MCP</span>
+        <span class="chip">allowlist</span>
+        <span class="chip">udiff</span>
+      </div>
+    </div>
+    <div class="meta-card">
+      <h6>下一步建议</h6>
+      <ol style="margin:0; padding-left:18px; font-size:13px; color:var(--ink-3); line-height:1.55;">
+        <li>把"5 大组件"下沉成 <code>docs/specs/0001-harness.md</code></li>
+        <li>开放问题 Q1–Q4 各起 ADR draft</li>
+        <li>报告呈现形态作为主 <code>/web</code> 第一切片设计参考</li>
+      </ol>
+    </div>
+  </aside>
+
+</div>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-inner">
+    <div class="col">
+      <h6>关于本报告</h6>
+      <p class="disclaimer">这是 DeepInsight 应用<strong style="color:var(--ink);">最终产出形态</strong>的呈现 demo。内容观点真实成立，但表中具体数字、雷达评分、token 计数等为<mark>示意 mock</mark>。本页面无任何外部 API 调用 —— 真正的 DeepInsight 报告由 LLM + 真实抓取生成。</p>
+    </div>
+    <div class="col">
+      <h6>归档</h6>
+      <p><code>explorations/阿宝-test1/index.html</code></p>
+      <p>看板「前期探索」tab 自动收录</p>
+    </div>
+    <div class="col">
+      <h6>构建</h6>
+      <p>纯静态 · 单文件</p>
+      <p>无外部 CDN · 双击即开</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ============ Theme toggle ============
+  (function() {
+    const root = document.documentElement;
+    const KEY = 'deepinsight-theme';
+    const saved = localStorage.getItem(KEY);
+    if (saved) root.dataset.theme = saved;
+    else {
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      root.dataset.theme = prefersDark ? 'dark' : 'light';
+    }
+    document.getElementById('theme-toggle').addEventListener('click', () => {
+      const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      root.dataset.theme = next;
+      localStorage.setItem(KEY, next);
+    });
+  })();
+
+  // ============ Reading progress ============
+  (function() {
+    const bar = document.getElementById('progress-bar');
+    if (!bar) return;
+    const onScroll = () => {
+      const h = document.documentElement;
+      const scrolled = h.scrollTop;
+      const max = h.scrollHeight - h.clientHeight;
+      const pct = max > 0 ? Math.min(100, (scrolled / max) * 100) : 0;
+      bar.style.width = pct + '%';
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+
+  // ============ TOC scrollspy ============
+  (function() {
+    const links = Array.from(document.querySelectorAll('.toc-rail a'));
+    const targets = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+    if (!('IntersectionObserver' in window) || targets.length === 0) return;
+
+    const linkOf = (id) => links.find(a => a.getAttribute('href') === '#' + id);
+    let active = null;
+    const setActive = (id) => {
+      if (active === id) return;
+      links.forEach(a => a.classList.remove('active'));
+      const l = linkOf(id);
+      if (l) l.classList.add('active');
+      active = id;
+    };
+
+    const io = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter(e => e.isIntersecting)
+        .sort((a, b) => a.target.getBoundingClientRect().top - b.target.getBoundingClientRect().top);
+      if (visible[0]) setActive(visible[0].target.id);
+    }, { rootMargin: '-15% 0px -65% 0px', threshold: 0 });
+
+    targets.forEach(t => io.observe(t));
+  })();
+</script>
+</body>
+</html>

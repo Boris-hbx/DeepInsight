@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>探索期 · 起步页</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    max-width: 720px;
+    margin: 60px auto;
+    padding: 0 24px;
+    color: #24292f;
+    line-height: 1.7;
+  }
+  h1 { font-size: 28px; margin-bottom: 8px; }
+  h2 { font-size: 18px; margin-top: 32px; border-bottom: 1px solid #d8dee4; padding-bottom: 4px; }
+  code { background: #f3f5f7; padding: 2px 6px; border-radius: 4px; font-family: "JetBrains Mono", Consolas, monospace; font-size: 0.9em; }
+  .hint { background: #fff8c5; border-left: 4px solid #d4a72c; padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 24px 0; }
+  .meta { color: #57606a; font-size: 13px; margin-bottom: 32px; }
+  ul { padding-left: 22px; }
+  li { margin: 4px 0; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 280px; padding: 14px 18px; background: #f6f8fa; border-radius: 8px; border: 1px solid #d8dee4; }
+  .row h3 { margin: 0 0 8px; font-size: 15px; }
+</style>
+</head>
+<body>
+  <h1>👋 你的探索从这里开始</h1>
+  <p class="meta">这是 <code>explorations/&lt;代号&gt;/index.html</code> 的起步模板。把它换成你的探索内容。</p>
+
+  <div class="hint">
+    第一步：编辑同目录的 <code>README.md</code>（标题 / 思路 / 截图路径），看板会自动收录你的卡片。
+  </div>
+
+  <h2>你可以做什么</h2>
+  <div class="row">
+    <div>
+      <h3>🎨 静态可视化</h3>
+      <ul>
+        <li>D3 / Chart.js / vis-network 画图</li>
+        <li>Mermaid 渲染流程</li>
+        <li>纯 HTML/CSS 交互卡片</li>
+      </ul>
+    </div>
+    <div>
+      <h3>⚛ 用框架</h3>
+      <ul>
+        <li>Vite / Next / Astro / Vue / Svelte</li>
+        <li>build 后把产物放本目录</li>
+        <li>确保 <code>index.html</code> 是入口</li>
+      </ul>
+    </div>
+    <div>
+      <h3>📝 设计稿</h3>
+      <ul>
+        <li>纯 markdown 渲染的设计文档</li>
+        <li>截图 + 注解</li>
+        <li>线框图（Excalidraw 导出 SVG）</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>不要做的事</h2>
+  <ul>
+    <li>调真实 API（前期纯静态，用 mock 数据展示思路）</li>
+    <li>写到 <code>/web</code> 或其他同事目录（hook 会拦你）</li>
+    <li>提交大于 200KB 的图片到仓库</li>
+  </ul>
+
+  <h2>提交</h2>
+  <pre><code>git add explorations/&lt;代号&gt;
+git commit -m "[pair] 阶段性探索：&lt;一句话&gt;"
+git push</code></pre>
+  <p>push 到 main 后，CI 30-60 秒内会刷新看板「前期探索」tab。</p>
+</body>
+</html>

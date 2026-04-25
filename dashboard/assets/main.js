@@ -19,8 +19,9 @@
   if (manualBody) {
     if (data.manualHtml) {
       manualBody.innerHTML = data.manualHtml;
+      attachPromptCopyButtons(manualBody);
     } else {
-      manualBody.innerHTML = '<p style="color:var(--muted)">⚠ 未找到运作手册数据，请确认 <code>项目初始化草稿.md</code> 存在并运行 <code>npm run build</code>。</p>';
+      manualBody.innerHTML = '<p style="color:var(--muted)">⚠ 未找到运作手册数据，请确认 <code>项目章程.md</code> 存在并运行 <code>npm run build</code>。</p>';
     }
   }
 
@@ -30,12 +31,22 @@
   // Stewardship panel
   renderStewardship(document.getElementById('stewardship-body'), data);
 
-  // Placeholder panels
+  // Explorations panel
+  renderExplorations(document.getElementById('explorations-body'), data);
+
+  // Insights panel
+  const insightsState = renderInsights(document.getElementById('insights-body'), data);
+
+  // ADR index panel
+  renderAdrs(document.getElementById('adr-body'), data);
+
+  // Skill registry panel
+  renderSkills(document.getElementById('skills-body'), data);
+
+  // Placeholder panels (剩余等真实数据积累的)
   const placeholders = {
     slices: { title: '切片墙', data: data.sliceWall },
-    agents: { title: 'Agent 协作度', data: data.agentMetrics },
-    adr: { title: 'ADR 索引', data: data.adrIndex },
-    skills: { title: 'Skill 注册表', data: data.skillRegistry }
+    agents: { title: 'Agent 协作度', data: data.agentMetrics }
   };
   Object.keys(placeholders).forEach(function (key) {
     const cfg = placeholders[key];
@@ -54,23 +65,36 @@
   // Tab switching
   const tabs = document.querySelectorAll('.tab');
   const panels = document.querySelectorAll('.panel');
+  function activateTab(targetName) {
+    tabs.forEach(function (x) { x.classList.toggle('active', x.dataset.tab === targetName); });
+    panels.forEach(function (p) { p.classList.toggle('active', p.id === targetName); });
+    // Insights tab 需要更宽的 main 以容纳左侧目录 + 右侧正文
+    document.body.classList.toggle('ins-wide', targetName === 'insights');
+  }
   tabs.forEach(function (t) {
     t.addEventListener('click', function (e) {
       e.preventDefault();
       const target = t.dataset.tab;
-      tabs.forEach(function (x) { x.classList.toggle('active', x === t); });
-      panels.forEach(function (p) { p.classList.toggle('active', p.id === target); });
+      activateTab(target);
       history.replaceState(null, '', '#' + target);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   });
 
-  // Honor hash on load
-  const hash = (location.hash || '').replace('#', '');
-  if (hash) {
-    const t = document.querySelector('.tab[data-tab="' + hash + '"]');
-    if (t) t.click();
+  // Honor hash on load: supports "#tab" and "#insights/<category>/<slug>"
+  function applyHash() {
+    const rawHash = (location.hash || '').replace('#', '');
+    if (!rawHash) return;
+    const [tabPart, ...rest] = rawHash.split('/');
+    const tabEl = document.querySelector('.tab[data-tab="' + tabPart + '"]');
+    if (!tabEl) return;
+    activateTab(tabPart);
+    if (tabPart === 'insights' && rest.length > 0 && insightsState && insightsState.selectByPath) {
+      insightsState.selectByPath(rest.join('/'));
+    }
   }
+  applyHash();
+  window.addEventListener('hashchange', applyHash);
 
   function setText(id, text) {
     const el = document.getElementById(id);
@@ -223,6 +247,376 @@
     el.innerHTML = html;
   }
 
+  function renderAdrs(el, data) {
+    if (!el) return;
+    const ad = data.adrIndex || {};
+    if (ad.placeholder) {
+      el.classList.add('placeholder');
+      el.innerHTML =
+        '<div class="empty-state">' +
+        '<div class="empty-icon">📜</div>' +
+        '<h3>ADR 索引（尚未填充）</h3>' +
+        '<p>' + escapeHtml(ad.message || '等待首批 ADR 入仓。') + '</p>' +
+        '<div class="hint">编辑 <code>docs/architecture/adr/NNNN-*.md</code> → push 到 main 后 CI 自动刷新</div>' +
+        '</div>';
+      return;
+    }
+    el.classList.remove('placeholder');
+
+    const adrs = ad.adrs || [];
+    const stats = ad.stats || { total: 0, accepted: 0, draft: 0, deprecated: 0 };
+
+    let html = '';
+    html += '<div class="tb-summary">';
+    html += '<div class="tb-summary-title">ADR 索引</div>';
+    html += '<div class="tb-summary-stats">';
+    html += statPill('总数', stats.total, '');
+    html += statPill('Accepted', stats.accepted, 'tb-stat-done');
+    html += statPill('Draft / Proposed', stats.draft, 'tb-stat-progress');
+    if (stats.deprecated > 0) html += statPill('已退役', stats.deprecated, 'tb-stat-open');
+    html += '</div>';
+    html += '<p class="tb-hint">真源：<code>docs/architecture/adr/</code> · 一个 ADR 一个决策 · 见 <a href="https://github.com/Boris-hbx/DeepInsight/blob/main/docs/architecture/adr/0000-record-architecture-decisions.md" target="_blank" rel="noopener">ADR-0000</a></p>';
+    html += '</div>';
+
+    html += '<ul class="adr-list">';
+    adrs.forEach(function (a) { html += renderAdrItem(a); });
+    html += '</ul>';
+
+    el.innerHTML = html;
+  }
+
+  function renderAdrItem(a) {
+    const cls = 'adr-status-' + (a.statusKind || 'unknown');
+    let h = '<li class="adr-item ' + cls + '">';
+    h += '<div class="adr-head">';
+    h += '<span class="adr-id">' + escapeHtml(a.id) + '</span>';
+    h += '<a class="adr-title" href="' + escapeHtml(a.githubUrl) + '" target="_blank" rel="noopener">' + escapeHtml(a.title) + ' ↗</a>';
+    h += '<span class="adr-badge ' + cls + '">' + escapeHtml(a.status) + '</span>';
+    h += '</div>';
+    if (a.summary) h += '<div class="adr-summary">' + escapeHtml(a.summary) + '</div>';
+    const meta = [];
+    if (a.date) meta.push(escapeHtml(a.date));
+    if (a.deciders) meta.push('Deciders: ' + escapeHtml(a.deciders));
+    if (a.supersedes) meta.push('Supersedes: ' + escapeHtml(a.supersedes));
+    if (a.supersededBy) meta.push('Superseded-by: ' + escapeHtml(a.supersededBy));
+    if (meta.length) h += '<div class="adr-meta">' + meta.join(' · ') + '</div>';
+    h += '</li>';
+    return h;
+  }
+
+  function renderSkills(el, data) {
+    if (!el) return;
+    const sk = data.skillRegistry || {};
+    if (sk.placeholder) {
+      el.classList.add('placeholder');
+      el.innerHTML =
+        '<div class="empty-state">' +
+        '<div class="empty-icon">🧰</div>' +
+        '<h3>Skill 注册表（尚未填充）</h3>' +
+        '<p>' + escapeHtml(sk.message || '等待 .claude/skills/ 下的 skill 注册。') + '</p>' +
+        '<div class="hint">新增 <code>.claude/skills/&lt;name&gt;.md</code> → push 到 main 后 CI 自动刷新</div>' +
+        '</div>';
+      return;
+    }
+    el.classList.remove('placeholder');
+
+    const skills = sk.skills || [];
+
+    let html = '';
+    html += '<div class="tb-summary">';
+    html += '<div class="tb-summary-title">Skill 注册表</div>';
+    html += '<div class="tb-summary-stats">';
+    html += statPill('已注册', skills.length, 'tb-stat-done');
+    html += '</div>';
+    html += '<p class="tb-hint">真源：<code>.claude/skills/</code> · agent 自动加载 · 触发条件见 frontmatter <code>description</code></p>';
+    html += '</div>';
+
+    html += '<ul class="skill-list">';
+    skills.forEach(function (s) { html += renderSkillItem(s); });
+    html += '</ul>';
+
+    el.innerHTML = html;
+  }
+
+  function renderSkillItem(s) {
+    let h = '<li class="skill-item">';
+    h += '<div class="skill-head">';
+    h += '<span class="skill-name">' + escapeHtml(s.name) + '</span>';
+    h += '<a class="skill-source" href="' + escapeHtml(s.githubUrl) + '" target="_blank" rel="noopener">' + escapeHtml(s.file) + ' ↗</a>';
+    h += '</div>';
+    if (s.description) h += '<div class="skill-desc"><span class="skill-label">触发：</span>' + escapeHtml(s.description) + '</div>';
+    if (s.detail && s.detail !== s.description) h += '<div class="skill-detail">' + escapeHtml(s.detail) + '</div>';
+    h += '</li>';
+    return h;
+  }
+
+  function renderExplorations(el, data) {
+    if (!el) return;
+    const ex = data.explorations || {};
+    const team = data.team || [];
+
+    if (ex.placeholder) {
+      el.classList.add('placeholder');
+      el.innerHTML =
+        '<div class="empty-state">' +
+        '<div class="empty-icon">🌱</div>' +
+        '<h3>前期探索（尚无人提交）</h3>' +
+        '<p>' + escapeHtml(ex.message || '探索期已开放，等待第一位同事提交。') + '</p>' +
+        '<div class="hint">新人本地：<code>npm run init-explore</code></div>' +
+        '</div>';
+      return;
+    }
+    el.classList.remove('placeholder');
+
+    const entries = ex.entries || [];
+    const byHandle = {};
+    entries.forEach(function (e) { byHandle[e.handle] = e; });
+
+    const submitted = entries.filter(function (e) { return e.hasReadme; }).length;
+    const pending = team.length - submitted;
+
+    let html = '';
+    html += '<div class="tb-summary">';
+    html += '<div class="tb-summary-title">前期探索 · ' + escapeHtml(ex.phase || '') + '</div>';
+    html += '<div class="tb-summary-stats">';
+    html += statPill('全员', team.length, '');
+    html += statPill('已提交', submitted, 'tb-stat-done');
+    html += statPill('待提交', pending, 'tb-stat-open');
+    html += '</div>';
+    html += '<p class="tb-hint">每人在 <code>explorations/&lt;代号&gt;/</code> 下做静态 demo · push 到 main 后 CI 自动刷新 · 收敛日：2026-05-09</p>';
+    html += '</div>';
+
+    html += '<div class="ex-grid">';
+    team.forEach(function (name) {
+      html += renderExCard(name, byHandle[name]);
+    });
+    // 名册外的探索者（如有）
+    entries.forEach(function (e) {
+      if (team.indexOf(e.handle) === -1) {
+        html += renderExCard(e.handle, e, true);
+      }
+    });
+    html += '</div>';
+
+    el.innerHTML = html;
+  }
+
+  function renderExCard(handle, entry, isExtra) {
+    if (!entry || !entry.hasReadme) {
+      let h = '<div class="ex-card ex-pending">';
+      h += '<div class="ex-card-head">';
+      h += '<span class="ex-handle">' + escapeHtml(handle) + '</span>';
+      h += '<span class="ex-status">待提交</span>';
+      h += '</div>';
+      h += '<div class="ex-empty">';
+      if (entry && !entry.hasReadme) {
+        h += '已建目录但 README 未填。<br>编辑 <code>explorations/' + escapeHtml(handle) + '/README.md</code> 的 frontmatter。';
+      } else {
+        h += '尚未开始。本地：<br><code>npm run init-explore</code>';
+      }
+      h += '</div>';
+      h += '</div>';
+      return h;
+    }
+
+    const e = entry;
+    let h = '<div class="ex-card ex-active' + (isExtra ? ' ex-extra' : '') + '">';
+    h += '<div class="ex-card-head">';
+    h += '<span class="ex-handle">' + escapeHtml(handle) + '</span>';
+    if (e.tags && e.tags.length) {
+      h += '<span class="ex-tags">';
+      e.tags.forEach(function (t) {
+        h += '<span class="ex-tag">' + escapeHtml(t) + '</span>';
+      });
+      h += '</span>';
+    }
+    h += '</div>';
+
+    if (e.title) h += '<div class="ex-title">' + escapeHtml(e.title) + '</div>';
+
+    // 截图：有 demoUrl 就直接打开 demo，否则回退到 GitHub 看代码
+    const shotHref = e.demoUrl ? e.demoUrl : e.githubUrl;
+    const shotTarget = e.demoUrl ? '_blank' : '_blank';
+    if (e.screenshotPublic) {
+      h += '<a class="ex-shot-link" href="' + escapeHtml(shotHref) + '" target="' + shotTarget + '" rel="noopener">';
+      h += '<img class="ex-shot" src="' + escapeHtml(e.screenshotPublic) + '" alt="' + escapeHtml(handle) + ' 探索截图" loading="lazy">';
+      h += '</a>';
+    } else if (e.demoUrl) {
+      h += '<a class="ex-shot-link ex-shot-placeholder-link" href="' + escapeHtml(e.demoUrl) + '" target="_blank" rel="noopener">';
+      h += '<div class="ex-shot-placeholder ex-shot-placeholder-clickable">点击打开 demo →</div>';
+      h += '</a>';
+    } else {
+      h += '<div class="ex-shot-placeholder">（暂无截图）</div>';
+    }
+
+    if (e.summary) h += '<div class="ex-summary-text">' + escapeHtml(e.summary) + '</div>';
+
+    h += '<div class="ex-actions">';
+    if (e.demoUrl) {
+      h += '<a class="ex-open-btn" href="' + escapeHtml(e.demoUrl) + '" target="_blank" rel="noopener">';
+      h += '<span class="ex-open-icon">▶</span>打开在线 demo';
+      h += '</a>';
+    } else {
+      h += '<span class="ex-warn">⚠ 缺 index.html，无法在线打开</span>';
+    }
+    h += '</div>';
+
+    h += '<div class="ex-meta">';
+    h += '<a class="ex-link" href="' + escapeHtml(e.githubUrl) + '" target="_blank" rel="noopener">看代码 ↗</a>';
+    h += '</div>';
+
+    h += '</div>';
+    return h;
+  }
+
+  function renderInsights(el, data) {
+    if (!el) return null;
+    const ins = data.insights || {};
+    if (ins.placeholder) {
+      el.classList.add('placeholder');
+      el.innerHTML =
+        '<div class="empty-state">' +
+        '<div class="empty-icon">📚</div>' +
+        '<h3>业界参考（尚未填充）</h3>' +
+        '<p>' + escapeHtml(ins.message || '等待 docs/Insights/ 下的 md 文档。') + '</p>' +
+        '<div class="hint">新增 <code>docs/Insights/**/*.md</code> → push 到 main → CI 自动重构建</div>' +
+        '</div>';
+      return null;
+    }
+    el.classList.remove('placeholder');
+
+    const categories = ins.categories || [];
+    const welcome = ins.welcome || null;
+    const total = ins.totalDocs || 0;
+
+    // Flatten for path lookup
+    const byPath = {};
+    categories.forEach(function (c) {
+      (c.docs || []).forEach(function (d) { byPath[d.path] = d; });
+      if (c.readme) byPath[c.readme.path] = c.readme;
+    });
+    if (welcome) byPath[welcome.path] = welcome;
+
+    let html = '';
+    html += '<div class="ins-layout">';
+
+    // LEFT: sidebar
+    html += '<aside class="ins-nav">';
+    html += '<div class="ins-nav-head">';
+    html += '<span class="ins-nav-title">业界参考</span>';
+    html += '<span class="ins-nav-count">' + total + ' 篇</span>';
+    html += '</div>';
+    html += '<p class="ins-nav-hint">真源：<code>docs/Insights/</code> · push 到 main 后 CI 自动刷新</p>';
+
+    if (welcome) {
+      html += '<div class="ins-group">';
+      html += '<div class="ins-group-head">总览</div>';
+      html += '<ul class="ins-doc-list">';
+      html += renderInsightItem(welcome, 'welcome');
+      html += '</ul>';
+      html += '</div>';
+    }
+
+    categories.forEach(function (c) {
+      html += '<div class="ins-group">';
+      html += '<div class="ins-group-head">' + escapeHtml(c.label) + '<span class="ins-group-count">' + (c.docs || []).length + '</span></div>';
+      html += '<ul class="ins-doc-list">';
+      if (c.readme) {
+        html += renderInsightItem(c.readme, 'readme');
+      }
+      (c.docs || []).forEach(function (d) {
+        html += renderInsightItem(d, 'doc');
+      });
+      html += '</ul>';
+      html += '</div>';
+    });
+    html += '</aside>';
+
+    // RIGHT: content
+    html += '<article class="ins-article">';
+    html += '<div class="ins-breadcrumb" id="ins-breadcrumb"></div>';
+    html += '<div class="ins-content" id="ins-content"></div>';
+    html += '</article>';
+
+    html += '</div>';
+    el.innerHTML = html;
+
+    // Bind item clicks
+    const items = el.querySelectorAll('.ins-doc-item');
+    items.forEach(function (it) {
+      it.addEventListener('click', function (e) {
+        e.preventDefault();
+        const p = it.dataset.path;
+        selectByPath(p, true);
+      });
+    });
+
+    function selectByPath(p, updateHash) {
+      const doc = byPath[p];
+      if (!doc) return false;
+      // toggle active state
+      items.forEach(function (x) { x.classList.toggle('active', x.dataset.path === p); });
+      // breadcrumb
+      const crumbEl = document.getElementById('ins-breadcrumb');
+      if (crumbEl) {
+        const segments = doc.path.split('/');
+        const crumbHtml = segments.map(function (s, i) {
+          const isLast = i === segments.length - 1;
+          return '<span class="ins-crumb' + (isLast ? ' ins-crumb-last' : '') + '">' + escapeHtml(s) + '</span>';
+        }).join('<span class="ins-crumb-sep">/</span>');
+        const updated = doc.updatedAt
+          ? '<span class="ins-updated">更新于 ' + escapeHtml(formatDate(doc.updatedAt)) + '</span>'
+          : '';
+        crumbEl.innerHTML =
+          '<div class="ins-crumb-path">📄 ' + crumbHtml + '</div>' +
+          '<div class="ins-crumb-actions">' +
+          updated +
+          '<a class="ins-source-link" href="' + escapeHtml(doc.githubUrl || '#') + '" target="_blank" rel="noopener">在 GitHub 查看 ↗</a>' +
+          '</div>';
+      }
+      // content
+      const contentEl = document.getElementById('ins-content');
+      if (contentEl) {
+        contentEl.innerHTML = doc.html || '';
+        contentEl.scrollTop = 0;
+      }
+      if (updateHash) {
+        history.replaceState(null, '', '#insights/' + doc.path);
+      }
+      return true;
+    }
+
+    // Default selection: welcome → first category's first doc → first category's README
+    let defaultPath = null;
+    if (welcome) defaultPath = welcome.path;
+    else if (categories.length > 0) {
+      const c = categories[0];
+      if (c.docs && c.docs.length > 0) defaultPath = c.docs[0].path;
+      else if (c.readme) defaultPath = c.readme.path;
+    }
+    if (defaultPath) selectByPath(defaultPath, false);
+
+    return { selectByPath: function (p) { return selectByPath(p, false); } };
+  }
+
+  function renderInsightItem(doc, kind) {
+    const cls = 'ins-doc-item ins-doc-' + kind;
+    let h = '<li><a href="#insights/' + escapeHtml(doc.path) + '" class="' + cls + '" data-path="' + escapeHtml(doc.path) + '">';
+    h += '<span class="ins-doc-title">' + escapeHtml(doc.title) + '</span>';
+    if (doc.summary && kind === 'doc') {
+      h += '<span class="ins-doc-summary">' + escapeHtml(doc.summary) + '</span>';
+    }
+    h += '</a></li>';
+    return h;
+  }
+
+  function formatDate(iso) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    } catch (_) { return iso; }
+  }
+
   function renderZoneCard(z) {
     const claimedCls = z.claimed ? 'sw-claimed' : 'sw-open';
     const guardianLabel = z.claimed ? z.guardian : '待认领';
@@ -249,5 +643,71 @@
     }
     h += '</div>';
     return h;
+  }
+
+  // 在「常用 prompt」section 内的代码块右上角加「复制」按钮。
+  // 范围：从 <h2>常用 prompt</h2> 起到下一个 <h2> 之前的所有 <pre>。
+  function attachPromptCopyButtons(root) {
+    const h2s = root.querySelectorAll('h2');
+    let promptH2 = null;
+    h2s.forEach(function (h) {
+      if (!promptH2 && h.textContent.trim() === '常用 prompt') promptH2 = h;
+    });
+    if (!promptH2) return;
+    let node = promptH2.nextElementSibling;
+    while (node && node.tagName !== 'H2') {
+      if (node.tagName === 'PRE') addCopyButton(node);
+      const inner = node.querySelectorAll ? node.querySelectorAll('pre') : null;
+      if (inner) inner.forEach(addCopyButton);
+      node = node.nextElementSibling;
+    }
+  }
+
+  function addCopyButton(pre) {
+    if (pre.querySelector('.copy-btn')) return;
+    pre.classList.add('has-copy');
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.type = 'button';
+    btn.textContent = '复制';
+    btn.addEventListener('click', function () {
+      const code = pre.querySelector('code');
+      const text = (code ? code.textContent : pre.textContent).replace(/\s+$/, '');
+      copyText(text).then(function () {
+        btn.textContent = '已复制 ✓';
+        btn.classList.add('copied');
+        setTimeout(function () {
+          btn.textContent = '复制';
+          btn.classList.remove('copied');
+        }, 1500);
+      }).catch(function () {
+        btn.textContent = '失败';
+        setTimeout(function () { btn.textContent = '复制'; }, 1500);
+      });
+    });
+    pre.appendChild(btn);
+  }
+
+  // 兼容 file:// 本地预览（非 secure context 下 navigator.clipboard 不可用）
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok ? resolve() : reject(new Error('execCommand failed'));
+      } catch (e) {
+        document.body.removeChild(ta);
+        reject(e);
+      }
+    });
   }
 })();

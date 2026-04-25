@@ -2,6 +2,23 @@
 
 > 这是给 Claude Code / agent 的项目级说明。进入本项目先读这个。
 
+## 8 人日常协作只用记 3 句话
+
+| 场景 | 跟 agent 说什么 |
+|---|---|
+| 第一次进项目 | **"我是新人，怎么开始？"** |
+| 想做探索 demo | **"我要做一个洞察 demo，主题是 \<X\>"** |
+| 想提交代码 | **"帮我把代码上传"** |
+
+不熟 git / GitHub / 命令行的同事**完全不需要记任何命令**。老手仍可命令行操作，三套并行。
+
+支撑 skill：
+- `.claude/skills/onboard.md`（首次进项目）
+- `.claude/skills/explore-mode.md`（探索期归档）
+- `.claude/skills/ship.md`（自动起分支 + commit + push + PR）
+
+底层规则在「探索期 Agent 守则」（本文末）和 `docs/guides/CONTRIBUTING.md`。
+
 ## 项目一页纸
 
 **DeepInsight**：洞察分析应用（PDF / 论文链接 / 博客链接 → 多模态结构化报告）。
@@ -12,7 +29,7 @@
 
 ## 三件必读文件
 
-1. **`项目初始化草稿.md`** —— 所有决策的真源（目录规范、spec 流程、部署策略、开放问题）。改方案先改这里。
+1. **`项目章程.md`** —— 项目元决策的根本记录（"为什么这样设计"）。新约定 → CLAUDE.md / CONTRIBUTING；新架构决策 → ADR；不在章程里加新内容。
 2. **`docs/task-board.md`** —— 任务令真源。接令 / 回写状态改这里，然后 `npm run build && npm run deploy`。
 3. **`docs/guides/CONTRIBUTING.md`** —— 分支、PR、commit、review 流程。
 
@@ -34,7 +51,7 @@
 
 ### Commit 规范
 - 开头标签：`[human]` / `[pair]` / `[agent]`。
-- AI 辅助时加 trailer：`Assisted-By: <model>`（**不**复用 `Co-Authored-By`，见草稿 § 4.4）。
+- AI 辅助时加 trailer：`Assisted-By: <model>`（**不**复用 `Co-Authored-By`，见章程 § 4.4）。
 
 ### Spec 流程
 `docs/specs/NNN-*.md` 提案 → 同事 review → `feat/*` 分支实现 → 合 `main` → 在 sync 演示。Spec 模板见 `docs/specs/TEMPLATE.md`。
@@ -45,7 +62,27 @@
 2. **高风险操作人工卡点**：force push、`rm -rf`、push `main`（绕过 PR）、改 git **全局** config —— **先征求同意**。
 3. **看板变更必经构建**：改完 md → `npm run build` → `npm run deploy`。**不要**绕过 build 直接 commit `dist/`。
 4. **不要伪造数据**：B2 状态面板（切片墙 / Agent 协作度 / ADR / Skill）要等真实 spec/commit 产生后自动填充，**不要 hardcode**。
-5. **Skill / subagent 变更** 按 prompt A/B eval 流程（见草稿 § 4.4 `anthropics/skills` 参考）。
+5. **Skill / subagent 变更** 按 prompt A/B eval 流程（见章程 § 4.4 `anthropics/skills` 参考）。
+
+## 探索期 Agent 守则（2026-04-25 ~ 2026-05-08）
+
+> 主 `/web` 应用启动前的「自由探索期」。每位同事在 `explorations/<代号>/` 下做自己的洞察 demo。详见 `explorations/README.md`。
+
+### Agent 默认行为
+
+1. **代号取自 `$DEEPINSIGHT_HANDLE`**（由 `npm run init-explore` 写入 `.claude/settings.local.json`）。未设时**先提示用户跑 `npm run init-explore`**，再开工。
+2. **模糊指令默认归档到 `explorations/$DEEPINSIGHT_HANDLE/`**：
+   - 例："做一个 PDF 摘要 demo" → 默认在自己 explorations 子目录里做，**不**进 `/web`
+   - 用户明确说"在主应用里加 X"且当前是探索期 → **先反问**确认意图，99% 概率是要在 exploration 里
+3. **`web/**` 禁写**（PreToolUse hook 兜底拦截）；改主应用要等收敛日（2026-05-09）后
+4. **`explorations/<other>/` 只读不写**（不能改其他同事目录）；要"借鉴"就写到自己 `README.md` 的「我借鉴了」section
+5. **入口约定**：`explorations/$DEEPINSIGHT_HANDLE/index.html` 必须存在（看板「前期探索」tab 扫这个文件）
+6. **纯静态、不调真实 LLM API**：用 mock 数据展示思路。前期没 secrets 担忧
+7. **触发场景化指引**：见 `.claude/skills/explore-mode.md`（任何"做一个 demo / 试想法"指令都应自动套用）
+
+### 收敛日（2026-05-09）后
+
+本节会被移除，hook 解封 `/web/**`，`explorations/` 进入归档（不删）。
 
 ## 常用命令
 
@@ -55,17 +92,25 @@ npm install
 npm run build              # → dist/
 npm run deploy             # → gh-pages 分支
 
+# 探索期初始化（新人 clone 后第一件事）
+npm run init-explore       # 写代号 + 复制 explorations/_template 到 explorations/<代号>/
+
 # Git 身份确认
 git config --local --list | grep user
+
+# 看自己的代号
+echo $DEEPINSIGHT_HANDLE   # bash/zsh
+echo %DEEPINSIGHT_HANDLE%  # cmd
+$env:DEEPINSIGHT_HANDLE    # PowerShell
 ```
 
 ## 有疑问先看
 
 | 疑问 | 去哪看 |
 |---|---|
-| 目录为什么这样组织？ | 草稿 § 2 |
-| 8 人怎么分工？ | 草稿 § 1.3（人人端到端 + 横向规范作者） |
-| API key 怎么管？ | 草稿 § 5 |
+| 目录为什么这样组织？ | 章程 § 2 |
+| 8 人怎么分工？ | 章程 § 1.3（人人端到端 + 横向规范作者） |
+| API key 怎么管？ | 章程 § 5 |
 | 怎么加 ADR？ | 抄 `docs/architecture/adr/0000-record-architecture-decisions.md` |
-| 业界最佳实践参考？ | 草稿 § 4 |
-| 为什么不部署 `/web`？ | 草稿 § 5（MVP 阶段纯本地） |
+| 业界最佳实践参考？ | 章程 § 4 |
+| 为什么不部署 `/web`？ | 章程 § 5（MVP 阶段纯本地） |
