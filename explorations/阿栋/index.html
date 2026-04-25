@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skill 最佳实践 · 一份可执行的洞察 — 阿栋</title>
+<style>
+  :root {
+    --bg: #fafbfc;
+    --surface: #ffffff;
+    --ink: #1f2328;
+    --muted: #57606a;
+    --line: #d8dee4;
+    --accent: #0969da;
+    --good: #1a7f37;
+    --warn: #9a6700;
+    --bad: #cf222e;
+    --code-bg: #f3f5f7;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  .container { max-width: 880px; margin: 0 auto; padding: 56px 24px 80px; }
+
+  /* Hero */
+  .hero { margin-bottom: 56px; }
+  .hero .kicker {
+    color: var(--muted); font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 12px;
+  }
+  .hero h1 { font-size: 40px; line-height: 1.25; margin: 0 0 16px; font-weight: 700; letter-spacing: -0.02em; }
+  .hero .lead { font-size: 19px; color: #424a53; margin: 0 0 24px; max-width: 640px; }
+  .hero .meta { color: var(--muted); font-size: 13px; }
+  .hero .meta span + span::before { content: " · "; margin: 0 6px; color: var(--line); }
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    background: #ddf4ff; color: var(--accent); font-size: 12px; font-weight: 500;
+  }
+
+  /* Section */
+  section { margin-top: 56px; }
+  h2 {
+    font-size: 22px; margin: 0 0 20px; font-weight: 700;
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  h2 .num {
+    font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 13px; color: var(--muted); font-weight: 400;
+    border: 1px solid var(--line); padding: 2px 8px; border-radius: 4px;
+  }
+  h3 { font-size: 16px; margin: 0 0 8px; font-weight: 600; }
+
+  /* Findings */
+  .findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .finding {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 20px 22px; position: relative;
+  }
+  .finding .idx {
+    color: var(--accent); font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 12px; font-weight: 600; margin-bottom: 8px;
+  }
+  .finding p { margin: 0; color: #424a53; font-size: 14px; }
+
+  /* Principle cards */
+  .principles { display: flex; flex-direction: column; gap: 16px; }
+  .principle {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 24px 26px;
+  }
+  .principle .head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .principle .icon {
+    width: 32px; height: 32px; border-radius: 8px; background: #ddf4ff;
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  .principle .body { color: #424a53; margin-bottom: 14px; }
+  .principle table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+  .principle th, .principle td {
+    text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top;
+  }
+  .principle th { color: var(--muted); font-weight: 500; background: #f6f8fa; }
+  .principle td code { font-size: 12px; }
+
+  code {
+    background: var(--code-bg); padding: 2px 6px; border-radius: 4px;
+    font-family: "JetBrains Mono", Consolas, monospace; font-size: 0.9em;
+  }
+
+  /* Bar chart */
+  .scoreboard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 24px 26px; }
+  .score-note { color: var(--muted); font-size: 12px; margin-top: 16px; line-height: 1.6; }
+  .score-row { display: grid; grid-template-columns: 120px 1fr; gap: 16px; align-items: center; padding: 10px 0; }
+  .score-row + .score-row { border-top: 1px dashed var(--line); }
+  .score-label { font-weight: 600; font-size: 14px; }
+  .score-label .file { color: var(--muted); font-weight: 400; font-size: 12px; display: block; font-family: "JetBrains Mono", Consolas, monospace; }
+  .bars { display: flex; flex-direction: column; gap: 6px; }
+  .bar { display: grid; grid-template-columns: 90px 1fr 32px; gap: 10px; align-items: center; font-size: 12px; }
+  .bar .dim { color: var(--muted); }
+  .bar .track { background: #eaeef2; height: 8px; border-radius: 999px; overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 999px; background: var(--accent); }
+  .bar .fill.good { background: var(--good); }
+  .bar .fill.warn { background: var(--warn); }
+  .bar .val { text-align: right; font-family: "JetBrains Mono", Consolas, monospace; font-weight: 600; color: var(--ink); }
+
+  /* Anti-patterns */
+  .antis { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .anti {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 20px; display: flex; gap: 14px;
+  }
+  .anti .x {
+    flex: 0 0 28px; height: 28px; border-radius: 50%; background: #ffebe9; color: var(--bad);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+  }
+  .anti h3 { margin: 0 0 4px; font-size: 14px; }
+  .anti p { margin: 0; font-size: 13px; color: var(--muted); }
+
+  /* Evidence */
+  .evidence {
+    background: #fff8c5; border-left: 4px solid #d4a72c; padding: 16px 20px; border-radius: 0 8px 8px 0;
+    font-size: 14px;
+  }
+  .evidence strong { color: #54470d; }
+  .evidence code { background: rgba(0,0,0,0.06); }
+
+  /* Next */
+  .next { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  .next .step {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .next .step .tag { color: var(--accent); font-size: 12px; font-weight: 600; }
+  .next .step h3 { margin: 6px 0 6px; }
+  .next .step p { margin: 0; color: var(--muted); font-size: 13px; }
+
+  /* Footer */
+  footer {
+    margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--line);
+    color: var(--muted); font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="hero">
+    <div class="kicker">DeepInsight · 探索期 · 阿栋</div>
+    <h1>Skill 不是文档，是给 agent 的状态机</h1>
+    <p class="lead">
+      把 <code>.claude/skills/</code> 下三个真实 skill 当样本，反推怎么写一个 agent 会用、不会绕过、不会乱触发的 Skill。
+    </p>
+    <div class="meta">
+      <span><span class="badge">v0 · 2026-04-25</span></span>
+      <span>主题：Skill 最佳实践</span>
+      <span>样本：onboard / explore-mode / ship</span>
+      <span>纯静态 mock 数据</span>
+    </div>
+  </header>
+
+  <section>
+    <h2><span class="num">01</span>关键发现</h2>
+    <div class="findings">
+      <div class="finding">
+        <div class="idx">F1</div>
+        <h3>触发 ≠ 标题</h3>
+        <p>description 字段必须列<strong>触发信号词</strong>（"做一个 demo / 试想法"），靠标题猜永远会漏。</p>
+      </div>
+      <div class="finding">
+        <div class="idx">F2</div>
+        <h3>流程 ≠ 解释</h3>
+        <p>把"用户说 → 默认理解 → 默认动作"做成表格，比写一段散文有效一个数量级。</p>
+      </div>
+      <div class="finding">
+        <div class="idx">F3</div>
+        <h3>边界 ≠ 提醒</h3>
+        <p>用 ✓ ✗ ⚠ 三个符号显式列允许/禁止，比"请注意"自然语言更难被 agent 忽略。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">02</span>三大设计原则</h2>
+    <div class="principles">
+
+      <article class="principle">
+        <div class="head">
+          <div class="icon">🎯</div>
+          <h3>原则一：触发设计——把 description 当路由器写</h3>
+        </div>
+        <p class="body">
+          agent 选不选你的 skill，只看 description 一行。要把<strong>用户原话级</strong>的触发词列进去，否则永远漏触发。
+        </p>
+        <table>
+          <thead><tr><th>反例</th><th>改进</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>"用于探索期工作"</code></td>
+              <td><code>"做一个 demo / 试一个想法 / 我想验证 / 实验一下"</code></td>
+            </tr>
+            <tr>
+              <td><code>"帮助提交代码"</code></td>
+              <td><code>"上传 / 提交 / 推上去 / 交差"（口语 + 同义词）</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </article>
+
+      <article class="principle">
+        <div class="head">
+          <div class="icon">⚙️</div>
+          <h3>原则二：流程要可机械执行——schema 化，不靠 reasoning</h3>
+        </div>
+        <p class="body">
+          每一步都要有<strong>明确输入、明确判断、明确动作</strong>。复杂分支用表格而不是嵌套段落。
+        </p>
+        <table>
+          <thead><tr><th>步骤</th><th>判断</th><th>动作</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>读 <code>$DEEPINSIGHT_HANDLE</code></td>
+              <td>空？</td>
+              <td>提示 init-explore，<strong>停止</strong></td>
+            </tr>
+            <tr>
+              <td>检查 <code>explorations/$HANDLE/</code></td>
+              <td>不存在？</td>
+              <td>同上</td>
+            </tr>
+            <tr>
+              <td>写文件</td>
+              <td>路径是否在 <code>$HANDLE</code> 下？</td>
+              <td>否则反问意图</td>
+            </tr>
+          </tbody>
+        </table>
+      </article>
+
+      <article class="principle">
+        <div class="head">
+          <div class="icon">🚧</div>
+          <h3>原则三：边界要符号化——✓ ✗ ⚠ 三个符号即可</h3>
+        </div>
+        <p class="body">
+          自然语言的"请避免"在 agent 眼里是软建议；显式的禁止符号更难被绕过。配 hook 兜底，构成"规范 + 强约束"双层。
+        </p>
+        <table>
+          <thead><tr><th>符号</th><th>语义</th><th>样例</th></tr></thead>
+          <tbody>
+            <tr><td style="color:var(--good)">✓</td><td>显式允许</td><td><code>explorations/$HANDLE/**</code>、<code>docs/**</code></td></tr>
+            <tr><td style="color:var(--bad)">✗</td><td>显式禁止</td><td><code>web/**</code>、<code>explorations/&lt;other&gt;/**</code></td></tr>
+            <tr><td style="color:var(--warn)">⚠</td><td>注意条件</td><td>不调真 LLM API（前期纯静态）</td></tr>
+          </tbody>
+        </table>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">03</span>仓内 Skill 评分（mock）</h2>
+    <div class="scoreboard">
+
+      <div class="score-row">
+        <div class="score-label">explore-mode<span class="file">.claude/skills/explore-mode.md</span></div>
+        <div class="bars">
+          <div class="bar"><div class="dim">触发设计</div><div class="track"><div class="fill good" style="width: 92%"></div></div><div class="val">92</div></div>
+          <div class="bar"><div class="dim">流程内化</div><div class="track"><div class="fill good" style="width: 88%"></div></div><div class="val">88</div></div>
+          <div class="bar"><div class="dim">边界符号化</div><div class="track"><div class="fill good" style="width: 95%"></div></div><div class="val">95</div></div>
+        </div>
+      </div>
+
+      <div class="score-row">
+        <div class="score-label">ship<span class="file">.claude/skills/ship.md</span></div>
+        <div class="bars">
+          <div class="bar"><div class="dim">触发设计</div><div class="track"><div class="fill" style="width: 78%"></div></div><div class="val">78</div></div>
+          <div class="bar"><div class="dim">流程内化</div><div class="track"><div class="fill" style="width: 82%"></div></div><div class="val">82</div></div>
+          <div class="bar"><div class="dim">边界符号化</div><div class="track"><div class="fill warn" style="width: 60%"></div></div><div class="val">60</div></div>
+        </div>
+      </div>
+
+      <div class="score-row">
+        <div class="score-label">onboard<span class="file">.claude/skills/onboard.md</span></div>
+        <div class="bars">
+          <div class="bar"><div class="dim">触发设计</div><div class="track"><div class="fill" style="width: 70%"></div></div><div class="val">70</div></div>
+          <div class="bar"><div class="dim">流程内化</div><div class="track"><div class="fill warn" style="width: 65%"></div></div><div class="val">65</div></div>
+          <div class="bar"><div class="dim">边界符号化</div><div class="track"><div class="fill warn" style="width: 55%"></div></div><div class="val">55</div></div>
+        </div>
+      </div>
+
+      <p class="score-note">
+        ✦ 评分维度：触发信号词丰富度 / 步骤可机械执行度 / 边界符号化覆盖率。<br>
+        ✦ 分数为人工读 md 后给的主观估值（mock）。真实洞察应用应基于：description 词频、流程是否含可决策表格、是否含 ✓✗⚠ 符号集做自动化评分。
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">04</span>反模式画廊</h2>
+    <div class="antis">
+      <div class="anti"><div class="x">✗</div><div><h3>description 写抽象愿景</h3><p>"帮助你更好地探索"——agent 读不出何时该路由进来。</p></div></div>
+      <div class="anti"><div class="x">✗</div><div><h3>一个 skill 塞多种能力</h3><p>"探索期 + 提交 + 部署"合一份 → 触发条件互相干扰，宁可拆三份。</p></div></div>
+      <div class="anti"><div class="x">✗</div><div><h3>流程靠"请你"</h3><p>"请确认代号"vs."读 <code>$DEEPINSIGHT_HANDLE</code>，空则停止" — 后者 agent 不会理解错。</p></div></div>
+      <div class="anti"><div class="x">✗</div><div><h3>边界只在 README 提一句</h3><p>规范要在 skill 内 + hook 兜底两层。只写一份等于没写。</p></div></div>
+      <div class="anti"><div class="x">✗</div><div><h3>没列反例</h3><p>"反模式" section 是验证 skill 写得够不够具体的试金石——写不出反例，说明流程也没具体到位。</p></div></div>
+      <div class="anti"><div class="x">✗</div><div><h3>不写收敛/失效条件</h3><p>探索期 skill 应说明"2026-05-09 后失效"，否则会留作技术债污染未来 agent 行为。</p></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">05</span>证据 · 自指</h2>
+    <div class="evidence">
+      <strong>本次洞察的最强样本就是本仓库的 <code>explore-mode.md</code> 自己。</strong><br>
+      它在 <code>.claude/skills/explore-mode.md:10-18</code> 列了 6 条触发信号词，
+      在 <code>:42-48</code> 用「用户说 / 默认理解 / 默认动作」三列表，
+      在 <code>:51-54</code> 用 ✗ / ✓ / ⚠ 列了 3+1 条边界，
+      在 <code>:84-89</code> 列了 4 条反模式，
+      在 <code>:91-93</code> 写了"收敛日 2026-05-09 失效"。<br>
+      —— 这正是本页提炼出的全部三大原则的实例。也是为什么阿栋这次直接被 skill 引导着完成了 init。
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="num">06</span>下一步</h2>
+    <div class="next">
+      <div class="step"><div class="tag">v0.1</div><h3>给评分自动化</h3><p>读 md → 词频 / 表格数 / 符号数 → 输出数值。无需 LLM，正则即可。</p></div>
+      <div class="step"><div class="tag">v0.2</div><h3>补 anthropics/skills 对照</h3><p>抓公开仓库 README，对比社区 skill 命名/触发风格，看本仓有没有偏出业界惯例。</p></div>
+      <div class="step"><div class="tag">v0.3</div><h3>套到任意 markdown</h3><p>这个 schema 可以推广到 spec / ADR 评审——把"洞察分析"从 PDF 扩到任意结构化文本。</p></div>
+    </div>
+  </section>
+
+  <footer>
+    阿栋 · DeepInsight 探索期（2026-04-25 ~ 2026-05-08） ·
+    本页 100% 静态 + 人工 mock，仅展示未来真实洞察输出的样子。
+  </footer>
+
+</div>
+</body>
+</html>
