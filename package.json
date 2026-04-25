@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node scripts/build-dashboard.js",
     "preview": "node scripts/preview.js",
-    "deploy": "npm run build && gh-pages -d dist -b gh-pages -m \"deploy: dashboard $(node -e \\\"process.stdout.write(new Date().toISOString().slice(0,10))\\\")\"",
+    "deploy": "npm run build && gh-pages -d dist -b gh-pages -m \"deploy: dashboard $(date +%Y-%m-%d)\"",
     "init-explore": "node scripts/init-explore.js"
   },
   "devDependencies": {
