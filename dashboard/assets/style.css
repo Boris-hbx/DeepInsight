@@ -206,10 +206,32 @@ body.ins-wide { --main-width: 1180px; }
   border-radius: 10px;
   padding: 32px 40px;
 }
-/* 文档型 panel 用稍亮 bg，长文阅读更舒适 */
+/* 文档型 panel：长文阅读优化（亮 bg + 字号 + code 柔色）*/
 #manual .panel-body {
   background: #1a1d28;
+  font-size: 16px;
+  line-height: 1.85;
 }
+/* 章程里 inline code 不要满屏黄色刺眼，改柔和浅蓝灰 */
+#manual .panel-body code {
+  color: #b8c4d4;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.92em;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+/* pre 内的 code 保持正常 text 色（不要受上面规则影响）*/
+#manual .panel-body pre code {
+  color: var(--text);
+  background: none;
+  border: none;
+}
+/* prompt 高亮块仍用 accent 强调 */
+#manual .panel-body pre code.language-text {
+  color: var(--accent);
+}
+/* 章程标题更呼吸 */
+#manual .panel-body h2 { margin-top: 44px; }
+#manual .panel-body h3 { margin-top: 28px; }
 
 /* 全局通用：链接 / 按钮 / 卡片的 focus 可见 */
 a:focus-visible,
