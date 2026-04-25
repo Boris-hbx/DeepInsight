@@ -2,19 +2,21 @@
 
 > 这是给 Claude Code / agent 的项目级说明。进入本项目先读这个。
 
-## 8 人日常协作只用记 3 句话
+## 8 人日常协作只用记 4 句话
 
 | 场景 | 跟 agent 说什么 |
 |---|---|
 | 第一次进项目 | **"我是新人，怎么开始？"** |
 | 想做探索 demo | **"我要做一个洞察 demo，主题是 \<X\>"** |
+| 想本地看效果 | **"我要本地预览一下"** |
 | 想提交代码 | **"帮我把代码上传"** |
 
-不熟 git / GitHub / 命令行的同事**完全不需要记任何命令**。老手仍可命令行操作，三套并行。
+不熟 git / GitHub / 命令行的同事**完全不需要记任何命令**。老手仍可命令行操作，几套并行。
 
 支撑 skill：
 - `.claude/skills/onboard.md`（首次进项目）
 - `.claude/skills/explore-mode.md`（探索期归档）
+- `.claude/skills/preview.md`（本地 build + 浏览器打开看板与 demo）
 - `.claude/skills/ship.md`（自动起分支 + commit + push + PR）
 
 底层规则在「探索期 Agent 守则」（本文末）和 `docs/guides/CONTRIBUTING.md`。
