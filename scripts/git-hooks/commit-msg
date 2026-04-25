@@ -1,0 +1,70 @@
+#!/bin/sh
+# DeepInsight commit-msg hook
+#
+# 启用：在仓库根跑一次 `git config core.hooksPath scripts/git-hooks`
+#       （npm run init-explore 会自动配，新人无需手动）
+#
+# 校验：
+#   1. subject 必须以 [human] / [pair] / [agent] 开头（CONTRIBUTING § 4.1）
+#   2. [pair] / [agent] 必须含 `Assisted-By:` trailer（CONTRIBUTING § 4.2）
+#
+# 跨平台：使用 POSIX sh，兼容 git for windows / macOS / linux
+# 失败行为：exit 1 + 提示 → commit 被拒绝
+# 绕过：git commit --no-verify（违反约定，请勿）
+
+set -e
+
+msg_file="$1"
+[ -z "$msg_file" ] && exit 0
+
+msg=$(cat "$msg_file")
+first_line=$(printf '%s' "$msg" | head -n 1)
+
+# 跳过 git 自动生成的 commit
+case "$first_line" in
+  "Merge "*|"Revert "*|"fixup! "*|"squash! "*|"amend! "*|"Reapply "*) exit 0 ;;
+esac
+
+# 跳过空 message（git 自己会拒）
+[ -z "$first_line" ] && exit 0
+
+# 1. 标签前缀检查
+case "$first_line" in
+  "[human] "*|"[pair] "*|"[agent] "*) ;;
+  *)
+    cat >&2 <<'EOF'
+
+✗ commit message 必须以 [human] / [pair] / [agent] 开头
+
+  示例：
+    [human] 修拼写错误
+    [pair] 实现 PDF 摘要前端
+    [agent] 重构样式（agent 主导）
+
+  规约见 docs/guides/CONTRIBUTING.md § 4.1
+  当前 message：
+EOF
+    printf '    %s\n\n' "$first_line" >&2
+    exit 1
+    ;;
+esac
+
+# 2. [pair] / [agent] 必须含 Assisted-By trailer
+case "$first_line" in
+  "[pair] "*|"[agent] "*)
+    if ! printf '%s' "$msg" | grep -qiE '^Assisted-By[[:space:]]*:'; then
+      cat >&2 <<'EOF'
+
+✗ [pair] / [agent] commit 必须含 Assisted-By trailer
+
+  在 commit message 末尾加一行（**不**复用 Co-Authored-By）：
+    Assisted-By: Claude Opus 4.7 (1M context)
+
+  规约见 docs/guides/CONTRIBUTING.md § 4.2
+EOF
+      exit 1
+    fi
+    ;;
+esac
+
+exit 0

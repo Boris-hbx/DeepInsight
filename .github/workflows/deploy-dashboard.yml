@@ -5,7 +5,11 @@ on:
     branches: [main]
     paths:
       - 'docs/task-board.md'
-      - '项目初始化草稿.md'
+      - 'docs/stewardship.md'
+      - 'docs/Insights/**'
+      - 'docs/guides/TEAM.md'
+      - 'explorations/**'
+      - '项目章程.md'
       - 'dashboard/**'
       - 'scripts/build-dashboard.js'
       - 'package.json'

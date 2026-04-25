@@ -24,7 +24,7 @@ git config user.email "<GitHub 账号绑定邮箱>"
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-`.env.local` 已在 `.gitignore`。**严禁提交**。当前阶段每人用自己的 key（见草稿 § 5）。
+`.env.local` 已在 `.gitignore`。**严禁提交**。当前阶段每人用自己的 key（见章程 § 5）。
 
 ## 2. 分支
 
@@ -65,7 +65,7 @@ subject 开头加：
 Assisted-By: Claude Opus 4.7 (1M context)
 ```
 
-**不要**复用 `Co-Authored-By:`（理由：草稿 § 4.4）。
+**不要**复用 `Co-Authored-By:`（理由：章程 § 4.4）。
 
 ## 5. PR 要求
 

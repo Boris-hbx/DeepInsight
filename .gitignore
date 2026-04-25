@@ -29,3 +29,14 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Claude Code 本地覆盖（含 DEEPINSIGHT_HANDLE 等个人配置）
+.claude/settings.local.json
+
+# Explorations 内的本地构建产物
+explorations/*/node_modules/
+explorations/*/.next/
+explorations/*/dist/
+explorations/*/build/
+explorations/*/.env*
+!explorations/*/.env.example
