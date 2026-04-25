@@ -46,7 +46,7 @@ async function main() {
   console.log('');
 
   const handle = await prompt(
-    guess ? '代号 [回车确认 ' + guess + ']: ' : '代号（如 阿勇 / 阿伟 / 阿杰 / 阿智 / 阿邱 / 阿隽 / 阿锋 / 阿宝）: ',
+    guess ? '代号 [回车确认 ' + guess + ']: ' : '代号（如 阿勇 / 阿伟 / 阿杰 / 阿智 / 阿栋 / 阿隽 / 阿锋 / 阿宝）: ',
     guess
   );
   if (!handle) {

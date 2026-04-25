@@ -29,7 +29,7 @@ const SCREENSHOT_MAX_BYTES = 200 * 1024;                  // 200KB 上限，超�
 
 const REPO_BLOB_BASE = 'https://github.com/Boris-hbx/DeepInsight/blob/main/';
 
-const TEAM = ['阿勇', '阿伟', '阿杰', '阿智', '阿邱', '阿隽', '阿锋', '阿宝'];
+const TEAM = ['阿勇', '阿伟', '阿杰', '阿智', '阿栋', '阿隽', '阿锋', '阿宝'];
 
 const log = (msg) => console.log('[build] ' + msg);
 const warn = (msg) => console.warn('[build] ⚠ ' + msg);
