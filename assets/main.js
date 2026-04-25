@@ -19,6 +19,7 @@
   if (manualBody) {
     if (data.manualHtml) {
       manualBody.innerHTML = data.manualHtml;
+      attachPromptCopyButtons(manualBody);
     } else {
       manualBody.innerHTML = '<p style="color:var(--muted)">⚠ 未找到运作手册数据，请确认 <code>项目初始化草稿.md</code> 存在并运行 <code>npm run build</code>。</p>';
     }
@@ -526,5 +527,71 @@
     }
     h += '</div>';
     return h;
+  }
+
+  // 在「常用 prompt」section 内的代码块右上角加「复制」按钮。
+  // 范围：从 <h2>常用 prompt</h2> 起到下一个 <h2> 之前的所有 <pre>。
+  function attachPromptCopyButtons(root) {
+    const h2s = root.querySelectorAll('h2');
+    let promptH2 = null;
+    h2s.forEach(function (h) {
+      if (!promptH2 && h.textContent.trim() === '常用 prompt') promptH2 = h;
+    });
+    if (!promptH2) return;
+    let node = promptH2.nextElementSibling;
+    while (node && node.tagName !== 'H2') {
+      if (node.tagName === 'PRE') addCopyButton(node);
+      const inner = node.querySelectorAll ? node.querySelectorAll('pre') : null;
+      if (inner) inner.forEach(addCopyButton);
+      node = node.nextElementSibling;
+    }
+  }
+
+  function addCopyButton(pre) {
+    if (pre.querySelector('.copy-btn')) return;
+    pre.classList.add('has-copy');
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.type = 'button';
+    btn.textContent = '复制';
+    btn.addEventListener('click', function () {
+      const code = pre.querySelector('code');
+      const text = (code ? code.textContent : pre.textContent).replace(/\s+$/, '');
+      copyText(text).then(function () {
+        btn.textContent = '已复制 ✓';
+        btn.classList.add('copied');
+        setTimeout(function () {
+          btn.textContent = '复制';
+          btn.classList.remove('copied');
+        }, 1500);
+      }).catch(function () {
+        btn.textContent = '失败';
+        setTimeout(function () { btn.textContent = '复制'; }, 1500);
+      });
+    });
+    pre.appendChild(btn);
+  }
+
+  // 兼容 file:// 本地预览（非 secure context 下 navigator.clipboard 不可用）
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function (resolve, reject) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok ? resolve() : reject(new Error('execCommand failed'));
+      } catch (e) {
+        document.body.removeChild(ta);
+        reject(e);
+      }
+    });
   }
 })();

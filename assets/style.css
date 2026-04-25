@@ -892,3 +892,34 @@ body.ins-wide { --main-width: 1180px; }
   .tab { padding: 9px 12px; font-size: 12.5px; }
   main { padding: 20px 14px; }
 }
+
+/* 「常用 prompt」section 内代码块的「复制」按钮 */
+.panel-body pre.has-copy {
+  position: relative;
+  padding-right: 76px;
+}
+.copy-btn {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: var(--bg-elev);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1.5;
+}
+.copy-btn:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.copy-btn.copied {
+  background: rgba(74, 222, 128, 0.15);
+  color: #86efac;
+  border-color: rgba(74, 222, 128, 0.4);
+}
