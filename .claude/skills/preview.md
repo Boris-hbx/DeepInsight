@@ -27,34 +27,22 @@ ls package.json node_modules 2>&1 | head -3
 - `package.json` 不存在 → 不在仓根，先 `cd` 到 `$CLAUDE_PROJECT_DIR`
 - `node_modules` 不存在 → 跑 `npm install`（提示用户："首次本地预览，先装依赖（约 20 秒）"）
 
-### 步骤 2：build
+### 步骤 2：一条命令搞定（build + 自动开浏览器）
 
 ```bash
-npm run build
+npm run preview
 ```
+
+`scripts/preview.js` 会顺序：① `npm run build` ② 跨平台用系统默认浏览器打开 `dist/index.html`（Windows / macOS / Linux 都已处理）。**不要拆分手写 build + 自己拼 start/open 命令** —— Git Bash 下 `start` 行为不稳，单一脚本统一兜底。
 
 失败处理：
 - `Cannot find module 'marked'` → `npm install` 后重试
-- 其他错误 → 把 stderr 原样贴给用户（**不静默吞**），由用户决定改 md / 改脚本
+- 其他 build 错误 → 把 stderr 原样贴给用户（**不静默吞**），由用户决定改 md / 改脚本
+- 浏览器没自动起来 → 脚本会打印绝对路径让用户自己点；不要再 retry 一堆命令
 
-### 步骤 3：打开浏览器
+### 步骤 3：一句话回报
 
-按平台选命令（Windows 默认）：
-
-```bash
-# Windows (Git Bash / cmd / PowerShell)
-start "" "dist/index.html"
-
-# macOS
-open dist/index.html
-
-# Linux
-xdg-open dist/index.html
-```
-
-### 步骤 4：一句话回报
-
-> 已打开本地预览（`dist/index.html`）。改完 md / explorations 后再说一次"本地预览"即可重跑 build。要让 7 个同事都看到 → 说"帮我把代码上传"走 ship。
+> 浏览器已打开本地预览。改完 md / explorations 后再说一次"本地预览"即可重跑。要让 7 个同事都看到 → 说"帮我把代码上传"走 ship。
 
 ## 反模式
 
