@@ -37,9 +37,9 @@ class CedarGate(PolicyGate):
     默认 PolicyGate 仍是 pass-through,本类需显式启用,不影响既有流程。
     """
 
-    def __init__(self, mode: str = "shadow") -> None:
-        from .pdp import CedarPDP, Decision
-        self._pdp = CedarPDP(mode=mode)
+    def __init__(self, mode: str = "shadow", audit_dir=None) -> None:
+        from .pdp import AUDIT_DIR, CedarPDP, Decision
+        self._pdp = CedarPDP(mode=mode, audit_dir=audit_dir or AUDIT_DIR)
         self._D = Decision
         self.mode = mode
 

@@ -2,12 +2,40 @@
 
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 from typing import Any
 
 from .context import PipelineContext
 from .step import Step, StepRegistry
 from .gate import PolicyGate, GateResult, PolicyDenied
+
+
+def _resolve_gate(cedar_mode: str | None) -> PolicyGate:
+    """Phase 1 闸门选择。优先级:显式 cedar_mode > env DEEPINSIGHT_CEDAR_MODE > 'shadow'。
+
+    off     → PolicyGate pass-through(完全旧行为)
+    shadow  → CedarGate 只判定+审计,**不阻断**(默认;安全,收集策略缺口)
+    enforce → CedarGate 真阻断(DENY→raise,APPROVAL→skip)
+
+    shadow 下构造失败 → 退回 pass-through(绝不破坏既有 workflow);
+    enforce 下构造失败 → 抛出(fail-closed,宁可 run 失败不静默放行)。
+    """
+    mode = (cedar_mode or os.environ.get("DEEPINSIGHT_CEDAR_MODE", "shadow")).strip().lower()
+    if mode == "off":
+        return PolicyGate()
+    if mode not in ("shadow", "enforce"):
+        print(f"[Pipeline] 未知 DEEPINSIGHT_CEDAR_MODE={mode!r},回退 shadow", file=sys.stderr)
+        mode = "shadow"
+    try:
+        from .gate import CedarGate
+        return CedarGate(mode=mode)
+    except Exception as e:
+        if mode == "enforce":
+            raise
+        print(f"[Pipeline] CedarGate(shadow) 构造失败,回退 pass-through:{e}", file=sys.stderr)
+        return PolicyGate()
 
 try:
     import yaml as _yaml
@@ -83,8 +111,14 @@ def _parse_yaml_minimal(text: str) -> dict[str, Any]:
 
 
 class PipelineEngine:
-    def __init__(self, gate: PolicyGate | None = None, verbose: bool = False) -> None:
-        self.gate = gate or PolicyGate()
+    def __init__(
+        self,
+        gate: PolicyGate | None = None,
+        verbose: bool = False,
+        cedar_mode: str | None = None,
+    ) -> None:
+        # 显式 gate 优先;否则按 cedar_mode/env 解析(Phase 1:默认 shadow)
+        self.gate = gate if gate is not None else _resolve_gate(cedar_mode)
         self.verbose = verbose
 
     def run(self, workflow_path: Path, task: str, dry_run: bool = False, **kwargs: Any) -> PipelineContext:

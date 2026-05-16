@@ -36,6 +36,10 @@ def main() -> None:
     parser.add_argument("--skip-blue", action="store_true", help="Skip blue agent critique step")
     parser.add_argument("--list-workflows", action="store_true", help="List available workflows")
     parser.add_argument("--list-steps", action="store_true", help="List registered steps")
+    parser.add_argument(
+        "--cedar-mode", choices=["off", "shadow", "enforce"], default=None,
+        help="Cedar 闸门模式(默认:env DEEPINSIGHT_CEDAR_MODE 或 shadow)",
+    )
     args = parser.parse_args()
 
     if args.list_workflows:
@@ -68,7 +72,7 @@ def _run_workflow(args: argparse.Namespace) -> None:
         print(f"Available: {', '.join(w.stem for w in WORKFLOWS_DIR.glob('*.yaml'))}")
         sys.exit(1)
 
-    engine = PipelineEngine(verbose=args.verbose)
+    engine = PipelineEngine(verbose=args.verbose, cedar_mode=args.cedar_mode)
     task = args.keyword or args.url or args.workflow
     kwargs = {}
     if args.url:
