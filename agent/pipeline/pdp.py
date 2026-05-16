@@ -35,6 +35,7 @@ POLICY_GIT_PATH = "agent/policies/agent.cedar"             # git uses '/'
 DANGEROUS_ACTIONS = {
     "create_tool", "register_tool", "execute_tool",
     "write_file", "delete_file", "move_file", "chmod",
+    "read_file", "net_egress",
 }
 
 _TYPE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
@@ -45,7 +46,8 @@ _EUID_FORBIDDEN = re.compile(r'["\\\x00-\x1f]')
 # Cedar 评估时实体属性/上下文的默认值 —— 提供并集,避免 policy 引用缺失属性报错
 _RESOURCE_DEFAULTS: dict[str, Any] = {"path": "", "source_code": "", "registered": False}
 _CONTEXT_DEFAULTS: dict[str, Any] = {
-    "trust": "user", "tools_created_this_run": 0, "steps_done": 0, "skip_blue": False,
+    "trust": "user", "tools_created_this_run": 0, "steps_done": 0,
+    "skip_blue": False, "net_allowed": False, "domain": "",
 }
 
 

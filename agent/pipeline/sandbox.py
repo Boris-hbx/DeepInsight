@@ -203,6 +203,7 @@ def run_sandboxed(
     timeout: int = 60,
     protect_paths: list[Path] | None = None,
     tier: str = "auto",
+    extra_env: dict | None = None,
 ):
     """在沙箱内跑 cmd。返回 (rc, stdout, stderr, SandboxReport)。
 
@@ -210,6 +211,10 @@ def run_sandboxed(
           不可用则**诚实回退 A** + advisory,绝不伪装)。
     mode: 'advisory'=施加控制+记录;'enforce'=另:violation/超时 → fail-closed。
     """
+    if (tier or "auto").strip().upper() == "C":
+        return run_brokered(cmd, mode=mode, jail_root=jail_root,
+                            timeout=timeout, protect_paths=protect_paths)
+
     report = SandboxReport()
     protected = protect_paths if protect_paths is not None else _default_protected()
     pre = {str(p): _hash_target(p) for p in protected}
@@ -218,6 +223,8 @@ def run_sandboxed(
     (jail / "out").mkdir(parents=True, exist_ok=True)
     cleanup = jail_root is None
     env = _clean_env(jail)
+    if extra_env:
+        env.update(extra_env)                       # 故意透传(如 Tier C broker 凭据)
 
     want = (tier or "auto").strip().upper()
     avail_tier, avail_backend = detect_backend()
@@ -302,4 +309,49 @@ def run_sandboxed(
         err = (err + f"\n[sandbox] FAIL-CLOSED ({why}): "
                f"{report.violations or 'timed_out'}").strip()
 
+    return rc, out, err, report
+
+
+def run_brokered(
+    cmd: list[str],
+    *,
+    mode: str = "advisory",
+    jail_root: Path | None = None,
+    timeout: int = 60,
+    protect_paths: list[Path] | None = None,
+    net_allow: set[str] | None = None,
+    fetcher=None,
+):
+    """Tier C:Cedar 经 broker 中介子进程的每个 fs/net。
+
+    底座用 Tier A 硬化(env/jail/timeout/完整性)+ token 鉴权 loopback
+    socket 的 broker 通道。**诚实**:未与 Tier B 组合 → 裸 syscall 未被
+    OS 阻断,仅对**用 sandbox_client 的协作工具**完整中介 + 全审计;
+    与 Tier B 组合需 UDS/管道传输(spec 002 §9)。
+    """
+    from .broker import Broker
+
+    if net_allow is None:
+        raw = os.environ.get("DEEPINSIGHT_NET_ALLOW", "")
+        net_allow = {d.strip().lower() for d in raw.split(",") if d.strip()}
+
+    broker = Broker(net_allow=net_allow, fetcher=fetcher)
+    host, port, token, _ = broker.serve_socket()
+    try:
+        rc, out, err, report = run_sandboxed(
+            cmd, mode=mode, jail_root=jail_root, timeout=timeout,
+            protect_paths=protect_paths, tier="A",
+            extra_env={"DS_BROKER_ADDR": f"{host}:{port}",
+                       "DS_BROKER_TOKEN": token},
+        )
+    finally:
+        broker.stop()
+
+    base = report.backend
+    report.tier = "C"
+    report.backend = f"C(broker)+{base}"
+    report.enforcing.append("broker:cedar-mediated-fs-net(每 op 过 Cedar+审计)")
+    report.advisory.append(
+        "Tier C 未组合 Tier B:裸 open()/socket() 未被 OS 阻断 —— "
+        "仅协作(用 sandbox_client)工具完整中介;恶意绕开需 Tier B 兜底")
     return rc, out, err, report

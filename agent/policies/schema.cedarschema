@@ -11,6 +11,7 @@ entity Step;
 entity Tool      { registered: Bool };
 entity ToolScript { source_code: String };
 entity Path       { path: String };
+entity Net        { domain: String };
 
 // ─── 动作 ─────────────────────────────────────────────────────────
 // 危险操作(AgentLoop 接入点 B)
@@ -37,6 +38,19 @@ action "write_file", "delete_file", "move_file", "chmod" appliesTo {
   principal: [Agent],
   resource:  [Path],
   context:   { trust: String }
+};
+
+// Tier C broker 中介的读 / 出网
+action "read_file" appliesTo {
+  principal: [Agent],
+  resource:  [Path],
+  context:   { trust: String }
+};
+
+action "net_egress" appliesTo {
+  principal: [Agent],
+  resource:  [Net],
+  context:   { net_allowed: Bool, domain: String, trust: String }
 };
 
 // Pipeline step 动作(接入点 A;principal 为 Workflow)

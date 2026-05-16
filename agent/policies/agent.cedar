@@ -140,3 +140,31 @@ when {
   resource.path like "agent/tools/.tmp/*" ||
   resource.path like "agent/changelog.md"
 };
+
+
+// ─── Tier C broker:每个 read_file / net_egress 都过 Cedar ──────────
+
+// 读文件:策略 / 审计 / 凭证 / git 对工具不可读(防经 broker 外泄)
+@id("forbid.read_secrets")
+forbid (principal, action == Action::"read_file", resource)
+when {
+  resource.path like "agent/policies/*" ||
+  resource.path like "agent/.audit/*" ||
+  resource.path like "*/.env*" ||
+  resource.path like "*/.git/*" ||
+  resource.path like "*.credentials*"
+};
+
+// 允许读 repo 数据与 jail 临时区(默认拒绝,显式放行)
+@id("permit.read_repo_data")
+permit (principal == Agent::"deepinsight", action == Action::"read_file", resource)
+when {
+  resource.path like "data/*" ||
+  resource.path like "agent/tools/.tmp/*"
+};
+
+// 出网默认拒绝;仅 broker 依可信域名白名单置位的 net_allowed==true 放行。
+// net_allowed 由受信 broker 计算,非 agent 输入(同 spec 001 context 原则)。
+@id("permit.net_allowlisted")
+permit (principal == Agent::"deepinsight", action == Action::"net_egress", resource)
+when { context.net_allowed == true };
