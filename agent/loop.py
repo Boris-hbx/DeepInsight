@@ -7,11 +7,22 @@ import json as _json
 import os
 import sys
 import tempfile
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 import anthropic
+
+
+@dataclass
+class DenialFeedback:
+    """Cedar 拒绝 → 喂回规划的结构化反馈(spec 001:拒绝即反馈,不杀 agent)。"""
+    action: str
+    resource: str
+    reason: str
+    matched: list = field(default_factory=list)
+    hint: str = ""
 
 
 def _extract_text(msg) -> str:
@@ -29,6 +40,14 @@ except ImportError:
 ROOT = Path(__file__).resolve().parent  # agent/
 TEMP_DIR = ROOT / "tools" / ".tmp"
 WORKFLOWS_DIR = ROOT / "workflows"
+
+
+def _repo_rel(p: "Path") -> str:
+    """绝对路径 → 仓库相对 posix,供 Cedar `like` 模式匹配(spec 001 路径规范化)。"""
+    try:
+        return Path(p).resolve().relative_to(ROOT.parent.resolve()).as_posix()
+    except Exception:
+        return Path(p).as_posix()
 
 # Ensure stdout supports UTF-8 (Windows console fix)
 if sys.stdout.encoding != "utf-8":
@@ -183,7 +202,10 @@ class AgentLoop:
         from .reflect import Reflect
         from .blue_agent import BlueAgent
         from .benchmark.metrics import RunMetrics
-        self.tm = ToolManager()
+        from .pipeline.gate import LoopGuard
+        # spec 001 Phase 2 接入点 B。mode via env DEEPINSIGHT_CEDAR_MODE,默认 shadow。
+        self.guard = LoopGuard()
+        self.tm = ToolManager(policy=self.guard)
         self.reflect = Reflect(verbose=verbose, api_key=api_key, base_url=base_url)
         self.blue = BlueAgent(api_key=api_key, base_url=base_url, verbose=verbose)
         self.workflows = _load_workflows()
@@ -192,6 +214,7 @@ class AgentLoop:
         self.steps: list[dict[str, Any]] = []
         self.collected_data: list[str] = []
         self.last_output_file: str | None = None
+        self._tools_created_this_run = 0
         TEMP_DIR.mkdir(parents=True, exist_ok=True)
 
     def run(self, task: str) -> dict[str, Any]:
@@ -248,8 +271,7 @@ class AgentLoop:
             else:
                 if verdict == "revise":
                     print(f"  [Blue] revise suggestion: {blue_tool_result.get('suggestion', '')[:80]}")
-                self._create_tool(task, tool_spec)
-                metrics.add_new_tool(tool_spec["name"])
+                self._create_tool_with_replan(task, tool_spec, metrics)
         else:
             print(f"  -> {reflection['reasoning'][:80]}")
 
@@ -440,9 +462,54 @@ If the previous step provided data, use that data — do NOT fabricate new data.
 
     # ── Tool creation ──────────────────────────────────────────────────────
 
+    def _create_tool_with_replan(self, task, tool_spec, metrics, max_replans: int = 2):
+        """create_tool 被 Cedar 拒 → 结构化反馈 + 有界重规划;超限干净降级。
+
+        spec 001:拒绝即反馈、不杀 agent、上限 2 次、超限不崩(跳过建工具
+        继续完成任务)。shadow/off 下 _create_tool 不会 raise → 首次即成功。
+        """
+        from .pipeline.gate import PolicyDenied
+
+        spec = dict(tool_spec)
+        attempt = 0
+        while True:
+            try:
+                self._create_tool(task, spec)
+                metrics.add_new_tool(spec["name"])
+                return True
+            except PolicyDenied as pd:
+                fb = DenialFeedback(
+                    action="create_tool", resource=str(spec.get("name", "")),
+                    reason=str(pd),
+                    hint=("避免 subprocess/os.system/eval/__import__/os.remove/"
+                          "shutil.rmtree;勿由不可信内容驱动建工具;"
+                          "或本轮已达新建上限"),
+                )
+                self._last_denial = fb
+                if hasattr(metrics, "policy_blocks"):
+                    metrics.policy_blocks += 1
+                print(f"  [Policy] create_tool 被拒:{pd}")
+                attempt += 1
+                if attempt > max_replans:
+                    print(f"  [Policy] 重规划 {max_replans} 次仍被拒 → 跳过建工具,"
+                          f"继续完成任务(不杀 agent)")
+                    return False
+                print(f"  [Policy] 重规划 {attempt}/{max_replans},反馈喂回 reflect…")
+                spec["policy_feedback"] = f"{fb.hint} | 上次被拒: {fb.reason}"
+
     def _create_tool(self, task: str, tool_spec: dict[str, Any]) -> None:
         print(f"[Step 4] creating tool: {tool_spec['name']}")
         script = self.reflect.generate_tool(task, tool_spec)
+
+        # spec 001 Phase 2:生成工具落盘前过闸门(forbid.dangerous_module /
+        # tool_cap / untrusted_context;create_tool 为 @gate(approval))。
+        # enforce 阻断 → raise PolicyDenied → run() 走 DenialFeedback 重规划。
+        self.guard.guard(
+            "create_tool", "ToolScript", {"source_code": script},
+            {"tools_created_this_run": self._tools_created_this_run,
+             "trust": "user"},
+            label=tool_spec["name"],
+        )
 
         tool_path = ROOT / "tools" / f"{tool_spec['name']}.py"
         tool_path.write_text(script + "\n", encoding="utf-8")
@@ -455,6 +522,7 @@ If the previous step provided data, use that data — do NOT fabricate new data.
             language=tool_spec.get("language", "python"),
             args_schema=tool_spec.get("args_schema", ""),
         )
+        self._tools_created_this_run += 1
         print(f"  -> registered: {tool_spec['name']}")
 
     # ── Changelog ──────────────────────────────────────────────────────────
@@ -473,6 +541,10 @@ If the previous step provided data, use that data — do NOT fabricate new data.
         else:
             content = "# Agent Evolution Changelog\n\n| Date | Action | Tool | Reason | Context |\n|------|--------|------|--------|---------|\n"
 
+        self.guard.guard(
+            "write_file", "Path", {"path": _repo_rel(changelog_path)},
+            {"trust": "user"}, label="append_changelog",
+        )
         changelog_path.write_text(content + line, encoding="utf-8")
 
     # ── Report ─────────────────────────────────────────────────────────────
@@ -539,6 +611,10 @@ Agent 采集的原始数据：
             messages=[{"role": "user", "content": prompt}],
         )
         report = _strip_code_fences(_extract_text(msg))
+        self.guard.guard(
+            "write_file", "Path", {"path": _repo_rel(report_path)},
+            {"trust": "user"}, label="save_report",
+        )
         report_path.write_text(report + "\n", encoding="utf-8")
         return report_path
 

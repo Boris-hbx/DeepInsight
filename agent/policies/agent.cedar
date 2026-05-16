@@ -54,7 +54,8 @@ forbid (
 )
 unless {
   resource.path like "data/reports/*" ||
-  resource.path like "agent/tools/.tmp/*"
+  resource.path like "agent/tools/.tmp/*" ||
+  resource.path like "agent/changelog.md"
 };
 
 // 单轮新建工具上限(防 self-evolving 失控自我增殖)
@@ -136,5 +137,6 @@ permit (
 )
 when {
   resource.path like "data/reports/*" ||
-  resource.path like "agent/tools/.tmp/*"
+  resource.path like "agent/tools/.tmp/*" ||
+  resource.path like "agent/changelog.md"
 };

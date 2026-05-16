@@ -32,10 +32,13 @@ def _save_registry(reg: dict[str, Any]) -> None:
 
 
 class ToolManager:
-    def __init__(self) -> None:
+    def __init__(self, policy=None) -> None:
         self.registry = _load_registry()
         self.tools_dir = TOOLS_DIR
         self.archive_dir = ARCHIVE_DIR
+        # spec 001 Phase 2 扼颈点 PEP。None = 不介入(行为不变);
+        # 传入 LoopGuard 实例则 execute/register 前过 Cedar(shadow 仅审计)。
+        self.policy = policy
 
     def list_tools(self) -> list[dict[str, Any]]:
         return self.registry.get("tools", [])
@@ -54,6 +57,12 @@ class ToolManager:
         language: str,
         args_schema: str = "",
     ) -> None:
+        if self.policy is not None:
+            # register_tool 受控:防止把恶意脚本标记为「已注册」绕执行白名单
+            self.policy.guard(
+                "register_tool", "Tool", {"registered": False},
+                {"trust": "user"}, label=f"register:{name}",
+            )
         tools = self.registry.setdefault("tools", [])
         existing = self.find_tool(name)
         if existing:
@@ -100,6 +109,13 @@ class ToolManager:
         tool_path = ROOT / tool["path"]
         if not tool_path.exists():
             raise FileNotFoundError(f"Tool script not found: {tool_path}")
+
+        if self.policy is not None:
+            # 扼颈点:子进程执行前过闸门(已注册工具 → permit.execute_registered_tool)
+            self.policy.guard(
+                "execute_tool", "Tool", {"registered": True},
+                {"trust": "user"}, label=f"execute:{name}",
+            )
 
         cmd = [sys.executable, str(tool_path)] + (args or [])
         result = subprocess.run(

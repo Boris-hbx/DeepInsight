@@ -5,7 +5,7 @@ author: 阿宝
 reviewers: []
 status: draft          # draft | review | approved | building | done | rejected
 created: 2026-05-15
-updated: 2026-05-15  # v5 Phase 1 CedarGate 接入 engine；v4 决策锁定+Phase 0；v3 审计 log-or-deny；v2 蓝军复审
+updated: 2026-05-15  # v6 Phase 2 LoopGuard+ToolManager PEP+DenialFeedback；v5 Phase 1；v4 决策锁定+Phase 0
 related_adrs: []
 related_tasks: []
 ---
@@ -217,7 +217,7 @@ def decide(req):
 
 - **Phase 0 — shadow**:`CedarPDP` 判定 + 落日志,**不阻断**。跑现有 3 个 workflow + 若干 loop 任务,收集「本会被拒的合法操作」→ 补 permit。解决默认拒绝的「策略引导/误杀」风险,且产出 golden 数据。
 - **Phase 1 — enforce pipeline**:✅ **已落地**。`engine.py._resolve_gate` 按 `--cedar-mode` / env `DEEPINSIGHT_CEDAR_MODE` 选闸门(`off`=pass-through / `shadow`=判定+审计不阻断【默认】/ `enforce`=DENY→raise、APPROVAL→skip);`shadow` 构造失败回退 pass-through,`enforce` 构造失败抛出(fail-closed)。`__main__.py` 加 `--cedar-mode`。3 个 workflow 的 step 已全在 `agent.cedar` 白名单,enforce 不误杀。
-- **Phase 2 — enforce AgentLoop**:接入点 B(PEP + 拒绝反馈环)。最高价值。
+- **Phase 2 — enforce AgentLoop**:✅ **已落地(默认 shadow)**。`LoopGuard`(gate.py)封装 CedarPDP;`ToolManager(policy=)` 扼颈点 PEP(`execute`→execute_tool、`register`→register_tool);`loop.py` `_create_tool` 前过 create_tool 闸门、`_save_report`/`_append_changelog` 过 write_file;`DenialFeedback` + `_create_tool_with_replan`(上限 2 次,超限干净降级不杀 agent)。**⚠ enforce 但沙箱(spec 002)未实现**:`LoopGuard` 启动即 loud WARN + 审计 `sandbox=absent` —— Cedar 确定性红线+审计生效,但生成工具子进程 syscall 不经 Cedar,**防御纵深不完整**,诚实标注。策略缺口 `agent/changelog.md` 经 shadow-first 发现并补入白名单。
 - **Phase 3 — CI**:`validate_policies(schema)` 进 CI;策略改动需评审。
 
 ### 4.3 备选方案
@@ -298,6 +298,7 @@ def decide(req):
 ## Changelog
 - 2026-05-15 初稿(阿宝 / pair with Claude）
 - 2026-05-15 v2 加固(阿宝 / pair):① 策略文件保护扩到删/改名/改权限(原仅 write）② fail-closed-on-missing「删=自锁」+ 信任锚 ③ 强制沙箱升为 Phase 2 硬前置 ④ 防 Cedar 注入(结构化实体)⑤ 路径规范化防穿越/软链 ⑥ `context.trust` 信任分级钉死 injection ⑦ registration 受控 ⑧ 审批层无人值守默认 DENY ⑨ 审计日志完整性。新增 6 条风险、7 条对抗用例、4 个开放问题。
+- 2026-05-15 v6 Phase 2 落地(阿宝 / pair):`LoopGuard` + `ToolManager` 扼颈点 PEP(execute/register)+ `loop.py` PEP(create_tool / save_report / append_changelog)+ `DenialFeedback` 有界重规划(cap 2,超限干净降级)。enforce 但无沙箱 → loud WARN + 审计 `sandbox=absent`(诚实标注防御纵深不完整,待 spec 002)。shadow-first 发现并修策略缺口:`agent/changelog.md` 入白名单。`agent/tests/test_phase2.py` 12 用例;全套 **38 用例过**。Phase 2 默认 shadow,`loop.py` 旧行为不变(policy=None 不介入)。
 - 2026-05-15 v5 Phase 1 落地(阿宝 / pair):`CedarGate` 接入 `PipelineEngine`。`engine._resolve_gate`(off/shadow/enforce,默认 shadow,优先级 显式>CLI>env>默认);`__main__.py --cedar-mode`;`CedarGate` 加 `audit_dir`;`agent/tests/test_engine_gate.py` 8 用例(选择优先级 + 端到端 enforce 阻断/放行/shadow 不阻断)。全套 26 用例过。Phase 1 仅 pipeline;loop.py(Phase 2)未动。
 - 2026-05-15 v4 决策锁定 + Phase 0 落地(阿宝 / pair):两阻塞决策定为 ① Git 锚 ② stderr 链头;sentinel 移除、DECISIONS-REQUIRED 打勾;agent.cedar 每条加 `@id`;实现 `agent/pipeline/pdp.py`(`CedarPDP`+`AuditLog`)、`CedarGate`(shadow)、`agent/tests/` golden/对抗用例;cedarpy 入 requirements。
 - 2026-05-15 v3 审计设计(阿宝 / pair):新增 §4.2「审计日志:log-or-deny」—— 记录是放行的前提(记不下即拒)、全判定都记、冗余 sink、哈希链防篡改、逐条 schema、fsync 策略、诚实边界。`agent/.audit/*` 纳入不可变更红线;§2/§5.2/§6/§8/§9 同步细化。
