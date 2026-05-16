@@ -118,15 +118,30 @@ class ToolManager:
             )
 
         cmd = [sys.executable, str(tool_path)] + (args or [])
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+
+        # spec 002 Tier A:DEEPINSIGHT_SANDBOX off|advisory|enforce(默认 off
+        # = 行为完全不变)。!=off → 经硬化启动器跑;enforce 下越界/超时
+        # 结果 fail-closed。保护 policies/audit/凭证不被子进程篡改。
+        sb = os.environ.get("DEEPINSIGHT_SANDBOX", "off").strip().lower()
+        if sb not in ("off", "advisory", "enforce"):
+            sb = "off"
+        if sb == "off":
+            result = subprocess.run(
+                cmd, capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
+            )
+            self._increment_usage(name)
+            return result.returncode, result.stdout, result.stderr
+
+        from .pipeline.sandbox import run_sandboxed
+        rc, out, err, report = run_sandboxed(cmd, mode=sb)
+        sys.stderr.write(
+            f"CEDAR-SANDBOX tool={name} tier={report.tier} mode={sb} "
+            f"violations={report.violations} timed_out={report.timed_out}\n"
         )
+        sys.stderr.flush()
         self._increment_usage(name)
-        return result.returncode, result.stdout, result.stderr
+        return rc, out, err
 
     def _increment_usage(self, name: str) -> None:
         for t in self.registry.get("tools", []):

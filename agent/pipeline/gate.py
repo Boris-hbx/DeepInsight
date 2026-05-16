@@ -97,15 +97,24 @@ class LoopGuard:
             return
         self._pdp = CedarPDP(mode=m, audit_dir=audit_dir or AUDIT_DIR)
         if m == "enforce":
-            sys.stderr.write(
-                "[LoopGuard] ⚠ enforce 但沙箱(spec 002)未实现:Cedar 红线+审计"
-                "生效,但生成工具子进程 syscall 不经 Cedar,防御纵深不完整。\n")
+            sb = os.environ.get("DEEPINSIGHT_SANDBOX", "off").strip().lower()
+            if sb in ("advisory", "enforce"):
+                msg = (f"[LoopGuard] enforce + sandbox Tier A({sb})生效:env 净化/"
+                       "凭证不可达/jail/超时/完整性侦测。边界:绝对路径写与裸 "
+                       "socket 仍为事后侦测(Tier B/C 见 spec 002)。")
+                sandbox_state = f"tier-A:{sb}"
+            else:
+                msg = ("[LoopGuard] ⚠ enforce 但 DEEPINSIGHT_SANDBOX=off:Cedar 红线+"
+                       "审计生效,但生成工具子进程 syscall 不经 Cedar,防御纵深不完整"
+                       "(spec 002 Tier A 已就绪,设 DEEPINSIGHT_SANDBOX=enforce 启用)。")
+                sandbox_state = "absent"
+            sys.stderr.write(msg + "\n")
             sys.stderr.flush()
             try:
                 self._pdp.audit.write({
                     "ts_wall": datetime.now(timezone.utc).isoformat(),
-                    "event": "loop_enforce_unsandboxed", "mode": "enforce",
-                    "sandbox": "absent", "decision": "-", "matched": [],
+                    "event": "loop_enforce_sandbox", "mode": "enforce",
+                    "sandbox": sandbox_state, "decision": "-", "matched": [],
                     "severity": "high",
                 })
             except Exception:

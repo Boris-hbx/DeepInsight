@@ -5,7 +5,7 @@ author: 阿宝
 reviewers: []
 status: draft          # draft | review | approved | building | done | rejected
 created: 2026-05-15
-updated: 2026-05-15
+updated: 2026-05-16  # Tier A 首版落地(opt-in，默认 off）
 related_adrs: []
 related_tasks: []
 ---
@@ -13,6 +13,14 @@ related_tasks: []
 # 002 · 工具沙箱 — 让 Cedar 红线在子进程级真正成立
 
 > 前置:`docs/specs/001-cedar-policy-gate.md`(spec 001 多处将本 spec 列为 Phase 2 enforce 的硬前置)
+>
+> **实现状态(2026-05-16)**:**Tier A 首版已落地**(`agent/pipeline/sandbox.py`,
+> opt-in `DEEPINSIGHT_SANDBOX=off|advisory|enforce`,默认 `off` 行为不变)。
+> 已**真生效**:env 净化、凭证不可达(HOME→jail)、cwd-jail、wall-timeout、
+> POSIX rlimit、`unshare -n`(Linux)、受保护路径完整性侦测 + enforce fail-closed。
+> 仍**未做**:独立 OS 账户/ACL 的事前 fs 写阻止、真网络默认 deny(Windows)、
+> Tier B(容器/namespace)、Tier C(broker 中介)。`agent/tests/test_sandbox.py`
+> 12 用例;`LoopGuard` enforce 时按 `DEEPINSIGHT_SANDBOX` 标注实际 tier。
 
 ## 1. 问题 / 动机
 
@@ -127,3 +135,4 @@ spec 001 把 Cedar 闸门做到了:确定性红线、log-or-deny 审计、删=�
 
 ## Changelog
 - 2026-05-15 初稿(阿宝 / pair with Claude）—— 承接 spec 001 Phase 2 诚实标注的子进程 syscall 缺口
+- 2026-05-16 Tier A 首版(阿宝 / pair):`agent/pipeline/sandbox.py`(`run_sandboxed`/`SandboxReport`/`detect_tier`)。预防层 env 净化+凭证不可达+cwd-jail+wall-timeout+POSIX rlimit+Linux unshare-net;侦测层 protected-path sha256 前后比对,enforce 下 violation/超时 fail-closed。`tool_manager.execute` opt-in 接入(`DEEPINSIGHT_SANDBOX`,默认 off);`LoopGuard` enforce 按实际 tier 标注(不再恒 `sandbox=absent`)。`test_sandbox.py` 12 用例;全套 50 过。**未实现**:OS 账户/ACL 事前写阻止、Windows 真网络 deny、Tier B/C。
