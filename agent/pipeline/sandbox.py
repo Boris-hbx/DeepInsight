@@ -1,26 +1,23 @@
-"""Tool sandbox — Tier A 硬化启动器(spec 002)。
+"""Tool sandbox — Tier A 硬化启动器 + Tier B OS 隔离(spec 002)。
 
-让 spec 001 的 Cedar 红线在子进程级真正起作用的第一档。Tier A 是
-**跨平台、免管理员、cheap-but-real** 的子集:
+让 spec 001 的 Cedar 红线在子进程级真正起作用。
 
-  预防(preventive,真生效):
-    - env 净化:剥离 ANTHROPIC_*/AWS_*/CLAUDE*/密钥类
-    - 凭证不可达:HOME/USERPROFILE 重定向到 jail → ~/.claude 落空目录
-    - cwd 关进一次性 jail;OUT_DIR 显式
-    - wall-timeout 强杀;POSIX 下 rlimit(CPU/内存/句柄/进程)
-    - Linux 有 `unshare` → 真网络命名空间隔离
+Tier A(跨平台、免管理员,始终可用):
+  预防:env 净化 / 凭证不可达(HOME→jail)/ cwd-jail / wall-timeout /
+       POSIX rlimit / Linux `unshare -n`
+  侦测:受保护路径(policies/audit/凭证)前后 sha256 比对 → violation;
+       enforce 下 violation/超时 → fail-closed
+  advisory(Tier A 挡不住):绝对路径写 jail 外、裸 socket 出网 = 事后侦测
 
-  侦测(detective,真生效,即使无 OS 隔离):
-    - 受保护路径(agent/policies、agent/.audit、~/.claude)运行前后
-      sha256 快照比对;改动即 violation。enforce 模式下 violation/超时
-      → 结果 fail-closed。这与 spec 001「删=自锁」同源。
+Tier B(强隔离,需 OS 能力,能力自适应):
+  - 容器(docker/podman):--network none --read-only --cap-drop ALL
+    --security-opt no-new-privileges,只读挂载脚本,jail 作工作区
+  - bubblewrap(Linux 无容器):--unshare-all+net --die-with-parent
+    --new-session,tmpfs HOME,只 ro-bind 系统目录与脚本(repo/凭证不可见)
+  能力不足 → **诚实回退 Tier A**(不伪装 B);report.tier 反映实际运行档。
+  env 净化 / jail / 完整性侦测 / 超时 在所有档位仍作纵深防御。
 
-  诚实边界(advisory,Tier A 挡不住,需 Tier B/C):
-    - 绝对路径写到 jail 外:**事后侦测,非事前阻止**
-    - 原始 socket 出网:env 代理中和只挡守规矩的库,挡不住裸 socket
-    - 读取并外泄非凭证数据
-
-强隔离见 spec 002 Tier B(容器/namespace)/ Tier C(broker 中介)。
+Tier C(broker 中介)未实现,见 spec 002 §4.2。
 """
 
 from __future__ import annotations
@@ -36,11 +33,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]                 # repo root
 
-# 需净化的 env 前缀/名(密钥承载者)
 _SECRET_PREFIXES = ("ANTHROPIC", "AWS", "CLAUDE", "OPENAI", "AZURE", "GOOGLE")
 _SECRET_NAMES = {"GH_TOKEN", "GITHUB_TOKEN", "HF_TOKEN", "OPENAI_API_KEY",
                  "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"}
-# 子进程保留的最小 env 键(值会被重写/透传安全部分)
 _KEEP = {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR",
          "LANG", "LC_ALL", "TZ", "PATHEXT", "COMSPEC", "NUMBER_OF_PROCESSORS"}
 
@@ -48,25 +43,40 @@ _KEEP = {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR",
 @dataclass
 class SandboxReport:
     tier: str = "A"
-    enforcing: list[str] = field(default_factory=list)   # 真预防/侦测的控制
-    advisory: list[str] = field(default_factory=list)    # 已知绕得过的
-    violations: list[str] = field(default_factory=list)  # 侦测到的越界
+    backend: str = "tierA-launcher"
+    enforcing: list[str] = field(default_factory=list)
+    advisory: list[str] = field(default_factory=list)
+    violations: list[str] = field(default_factory=list)
     timed_out: bool = False
 
     def as_dict(self) -> dict:
-        return {"sandbox_tier": self.tier, "sandbox_enforcing": self.enforcing,
+        return {"sandbox_tier": self.tier, "sandbox_backend": self.backend,
+                "sandbox_enforcing": self.enforcing,
                 "sandbox_advisory": self.advisory,
                 "sandbox_violations": self.violations,
                 "sandbox_timed_out": self.timed_out}
 
 
+def _which(x: str) -> str | None:
+    return shutil.which(x)
+
+
+def detect_backend() -> tuple[str, str]:
+    """返回 (tier, backend_name) —— 当前环境实际能提供的最强档。"""
+    if _which("docker"):
+        return "B", "container:docker"
+    if _which("podman"):
+        return "B", "container:podman"
+    if sys.platform.startswith("linux") and _which("bwrap"):
+        return "B", "bubblewrap"
+    return "A", "tierA-launcher"
+
+
 def detect_tier() -> str:
-    """当前能提供的最高档。Tier B/C 未实现 → 始终 'A'。"""
-    return "A"
+    return detect_backend()[0]
 
 
 def _hash_target(p: Path) -> dict[str, str]:
-    """文件 → {rel: sha256};目录 → 递归。缺失 → 空(也是一种状态)。"""
     out: dict[str, str] = {}
     try:
         if p.is_file():
@@ -97,28 +107,22 @@ def _clean_env(jail: Path) -> dict[str, str]:
     for k in _KEEP:
         if k in src:
             env[k] = src[k]
-    # PATH 精简:只留系统目录(够跑 python/标准工具),去掉用户/项目注入
     if sys.platform == "win32":
         sysroot = src.get("SYSTEMROOT", r"C:\Windows")
         env["PATH"] = os.pathsep.join([sysroot, f"{sysroot}\\System32"])
     else:
         env["PATH"] = "/usr/bin:/bin"
-    # 凭证不可达:home 指向 jail(空)→ ~/.claude/.credentials.json 落空
     js = str(jail)
     env["HOME"] = js
     env["USERPROFILE"] = js
     env["XDG_CONFIG_HOME"] = str(jail / ".config")
     env["APPDATA"] = str(jail / "AppData")
-    env["TEMP"] = js
-    env["TMP"] = js
-    env["TMPDIR"] = js
-    # 网络代理中和(advisory:只挡守规矩的 http 库)
+    env["TEMP"] = env["TMP"] = env["TMPDIR"] = js
     env["HTTP_PROXY"] = env["HTTPS_PROXY"] = env["ALL_PROXY"] = "http://127.0.0.1:9"
     env["http_proxy"] = env["https_proxy"] = env["all_proxy"] = "http://127.0.0.1:9"
     env["NO_PROXY"] = ""
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["OUT_DIR"] = str(jail / "out")
-    # 显式抹掉密钥类(防御性,_clean_env 是白名单本不该带进来,双保险)
     for k in list(env):
         if k.upper() in _SECRET_NAMES or k.upper().startswith(_SECRET_PREFIXES):
             del env[k]
@@ -146,6 +150,51 @@ def _posix_rlimits():  # pragma: no cover - 平台相关
     return _apply
 
 
+def _script_of(cmd: list[str]) -> str | None:
+    """cmd 形如 [python, script.py, ...] → 取脚本路径(用于 ro-bind/mount)。"""
+    if len(cmd) >= 2 and cmd[1] not in ("-c", "-m", "-") and Path(cmd[1]).exists():
+        return str(Path(cmd[1]).resolve())
+    return None
+
+
+def bwrap_argv(cmd: list[str], jail: Path, script: str | None) -> list[str]:
+    """Linux bubblewrap:unshare 全部(含网络),只读系统 + 脚本,jail 可写。
+
+    repo / 凭证 **不 bind** → 子进程不可见(强预防,非事后侦测)。
+    """
+    a = ["bwrap", "--die-with-parent", "--new-session", "--unshare-all",
+         "--proc", "/proc", "--dev", "/dev",
+         "--tmpfs", str(jail.parent if jail.parent != jail else jail),
+         "--bind", str(jail), str(jail), "--chdir", str(jail)]
+    for d in ("/usr", "/bin", "/lib", "/lib64", "/etc/alternatives"):
+        if Path(d).exists():
+            a += ["--ro-bind", d, d]
+    if script:
+        a += ["--ro-bind", script, script]
+    a += ["--"]
+    a += cmd
+    return a
+
+
+def container_argv(cmd: list[str], jail: Path, script: str | None,
+                   runtime: str, image: str) -> list[str]:
+    """docker/podman:无网络、只读 rootfs、丢能力、非 root、资源上限。
+
+    只读挂载脚本;jail 作可写工作区。repo / 凭证不挂载 → 不可见。
+    """
+    a = [runtime, "run", "--rm", "--network", "none", "--read-only",
+         "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+         "--pids-limit", "64", "--memory", "512m", "-u", "65534:65534",
+         "--tmpfs", "/work:rw,size=64m", "-w", "/work",
+         "-v", f"{jail}:/work"]
+    inner = list(cmd)
+    if script:
+        a += ["-v", f"{script}:/sbx/tool:ro"]
+        inner = [cmd[0], "/sbx/tool"] + cmd[2:]
+    a += [image] + inner
+    return a
+
+
 def run_sandboxed(
     cmd: list[str],
     *,
@@ -153,14 +202,15 @@ def run_sandboxed(
     jail_root: Path | None = None,
     timeout: int = 60,
     protect_paths: list[Path] | None = None,
+    tier: str = "auto",
 ):
-    """在 Tier A 沙箱内跑 cmd。返回 (rc, stdout, stderr, SandboxReport)。
+    """在沙箱内跑 cmd。返回 (rc, stdout, stderr, SandboxReport)。
 
-    mode='advisory':施加所有控制,侦测 violation 只记录不改判。
-    mode='enforce' :额外 —— 侦测到 violation 或超时 → 结果 fail-closed
-                     (rc=126/124,stderr 标注),决心绕过者至少留痕且被判失败。
+    tier: 'auto'(默认,选可用最强)| 'A'(强制硬化启动器)| 'B'(要强隔离;
+          不可用则**诚实回退 A** + advisory,绝不伪装)。
+    mode: 'advisory'=施加控制+记录;'enforce'=另:violation/超时 → fail-closed。
     """
-    report = SandboxReport(tier=detect_tier())
+    report = SandboxReport()
     protected = protect_paths if protect_paths is not None else _default_protected()
     pre = {str(p): _hash_target(p) for p in protected}
 
@@ -169,24 +219,56 @@ def run_sandboxed(
     cleanup = jail_root is None
     env = _clean_env(jail)
 
+    want = (tier or "auto").strip().upper()
+    avail_tier, avail_backend = detect_backend()
+    script = _script_of(cmd)
+
+    # 档位决策:诚实——不可用就回退 A,不伪装
+    use_b = False
+    if want in ("AUTO", "B") and avail_tier == "B":
+        use_b = True
+    elif want == "B" and avail_tier != "B":
+        report.advisory.append(f"requested Tier B 但不可用({avail_backend});回退 Tier A")
+
+    # 所有档位通用的纵深防御
     report.enforcing += ["env-sanitized", "creds-unreachable(HOME→jail)",
-                         "cwd-jail", "wall-timeout"]
+                         "cwd-jail", "wall-timeout",
+                         "integrity-monitor(protected paths sha256)"]
+
     run_cmd = list(cmd)
     preexec = None
-    if sys.platform != "win32":
-        preexec = _posix_rlimits()
-        if preexec:
-            report.enforcing.append("rlimit(cpu/mem/nofile/nproc)")
-        if shutil.which("unshare"):
-            run_cmd = ["unshare", "-n", "--"] + run_cmd
-            report.enforcing.append("net-namespace(unshare -n)")
-        else:
-            report.advisory.append("net:proxy-neuter(裸 socket 挡不住)")
+
+    if use_b:
+        report.tier = "B"
+        report.backend = avail_backend
+        if avail_backend.startswith("container:"):
+            rt = avail_backend.split(":", 1)[1]
+            image = os.environ.get("DEEPINSIGHT_SANDBOX_IMAGE", "python:3-slim")
+            run_cmd = container_argv(cmd, jail, script, rt, image)
+            report.enforcing += ["container:network-none", "container:read-only-rootfs",
+                                 "container:cap-drop-all", "container:no-new-privileges",
+                                 "container:non-root", "container:pids/mem-limit",
+                                 "repo+creds:not-mounted"]
+        else:  # bubblewrap
+            run_cmd = bwrap_argv(cmd, jail, script)
+            report.enforcing += ["bwrap:unshare-all+net", "bwrap:die-with-parent",
+                                 "bwrap:new-session", "repo+creds:not-bound"]
     else:
-        report.advisory += ["net:proxy-neuter(裸 socket 挡不住)",
-                            "no-rlimit(Windows;靠 wall-timeout)"]
-    report.advisory.append("fs-write:cwd-jail + 事后侦测(绝对路径写非事前阻止)")
-    report.enforcing.append("integrity-monitor(protected paths sha256)")
+        report.tier = "A"
+        report.backend = "tierA-launcher"
+        if sys.platform != "win32":
+            preexec = _posix_rlimits()
+            if preexec:
+                report.enforcing.append("rlimit(cpu/mem/nofile/nproc)")
+            if shutil.which("unshare"):
+                run_cmd = ["unshare", "-n", "--"] + run_cmd
+                report.enforcing.append("net-namespace(unshare -n)")
+            else:
+                report.advisory.append("net:proxy-neuter(裸 socket 挡不住)")
+        else:
+            report.advisory += ["net:proxy-neuter(裸 socket 挡不住)",
+                                "no-rlimit(Windows;靠 wall-timeout)"]
+        report.advisory.append("fs-write:cwd-jail + 事后侦测(绝对路径写非事前阻止)")
 
     rc, out, err = 0, "", ""
     try:
@@ -204,7 +286,7 @@ def run_sandboxed(
         rc, out = 124, (e.stdout or "")
         err = f"[sandbox] timeout after {timeout}s, killed"
     except FileNotFoundError as e:
-        rc, err = 127, f"[sandbox] cmd not found: {e}"
+        rc, err = 127, f"[sandbox] cmd/runtime not found: {e}"
     finally:
         post = {str(p): _hash_target(p) for p in protected}
         for key in pre:

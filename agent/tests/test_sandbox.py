@@ -11,7 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from agent.pipeline.sandbox import detect_tier, run_sandboxed
+from agent.pipeline import sandbox as sbx
+from agent.pipeline.sandbox import (
+    bwrap_argv, container_argv, detect_backend, detect_tier, run_sandboxed,
+)
 
 PY = sys.executable
 
@@ -160,5 +163,71 @@ def test_invalid_sandbox_mode_treated_off(monkeypatch):
         script.unlink(missing_ok=True)
 
 
-def test_detect_tier_is_A():
-    assert detect_tier() == "A"
+# ── Tier B:能力探测 / 回退 / argv 构造 ──────────────────────────────
+
+def test_detect_tier_reflects_caps():
+    # 跨环境正确:有 docker/podman/(linux+bwrap) → B,否则 A
+    assert detect_tier() in ("A", "B")
+    assert detect_tier() == detect_backend()[0]
+
+
+def test_detect_backend_container(monkeypatch):
+    monkeypatch.setattr(sbx, "_which", lambda x: "/usr/bin/docker" if x == "docker" else None)
+    assert detect_backend() == ("B", "container:docker")
+
+
+def test_detect_backend_bwrap_linux(monkeypatch):
+    monkeypatch.setattr(sbx.sys, "platform", "linux")
+    monkeypatch.setattr(sbx, "_which",
+                        lambda x: "/usr/bin/bwrap" if x == "bwrap" else None)
+    assert detect_backend() == ("B", "bubblewrap")
+
+
+def test_detect_backend_none(monkeypatch):
+    monkeypatch.setattr(sbx, "_which", lambda x: None)
+    assert detect_backend() == ("A", "tierA-launcher")
+
+
+def test_bwrap_argv_isolates(tmp_path):
+    a = bwrap_argv(["py", "/x/tool.py", "arg"], tmp_path, "/x/tool.py")
+    assert a[0] == "bwrap"
+    for flag in ("--unshare-all", "--die-with-parent", "--new-session"):
+        assert flag in a
+    assert "--ro-bind" in a and "/x/tool.py" in a       # 脚本只读绑定
+    assert a[-3:] == ["py", "/x/tool.py", "arg"]         # 内层 cmd 在末尾
+    # repo 根不应被 bind
+    assert str(sbx.ROOT) not in a
+
+
+def test_container_argv_hardened(tmp_path):
+    a = container_argv(["py", "/x/tool.py", "a"], tmp_path, "/x/tool.py",
+                       "docker", "python:3-slim")
+    assert a[:2] == ["docker", "run"]
+    for tok in ("--network", "none", "--read-only", "--cap-drop", "ALL",
+                "no-new-privileges", "python:3-slim"):
+        assert tok in a
+    assert "/sbx/tool" in a                              # 脚本只读挂载点
+    assert f"{tmp_path}:/work" in a
+
+
+def test_request_tier_b_unavailable_falls_back(tmp_path, monkeypatch):
+    monkeypatch.setattr(sbx, "_which", lambda x: None)   # 无任何强后端
+    rc, out, err, rep = _run("print('fb')", mode="advisory",
+                             jail_root=tmp_path, timeout=20)
+    # 注:_run 用 tier 默认 auto;显式要 B 时回退并 advisory
+    rc2, o2, e2, rep2 = run_sandboxed([PY, "-c", "print('x')"], mode="advisory",
+                                      jail_root=tmp_path / "j", tier="B")
+    assert rep2.tier == "A"
+    assert any("回退 Tier A" in s for s in rep2.advisory)
+    assert rc2 == 0
+
+
+@pytest.mark.skipif(detect_tier() != "B",
+                    reason="无 docker/podman/bwrap —— Tier B 实跑用例在 CI/Linux 执行")
+def test_tier_b_live_blocks_secret_read(tmp_path):
+    # 仅在真有强后端时跑:容器/bwrap 内 ~/.claude 必须不可见
+    rc, out, err, rep = _run(
+        "import pathlib;print((pathlib.Path.home()/'.claude').exists())",
+        mode="enforce", jail_root=tmp_path, tier="B")
+    assert rep.tier == "B"
+    assert "False" in out

@@ -5,7 +5,7 @@ author: 阿宝
 reviewers: []
 status: draft          # draft | review | approved | building | done | rejected
 created: 2026-05-15
-updated: 2026-05-16  # Tier A 首版落地(opt-in，默认 off）
+updated: 2026-05-16  # Tier A + Tier B 后端落地(能力自适应，默认 off）
 related_adrs: []
 related_tasks: []
 ---
@@ -16,11 +16,17 @@ related_tasks: []
 >
 > **实现状态(2026-05-16)**:**Tier A 首版已落地**(`agent/pipeline/sandbox.py`,
 > opt-in `DEEPINSIGHT_SANDBOX=off|advisory|enforce`,默认 `off` 行为不变)。
-> 已**真生效**:env 净化、凭证不可达(HOME→jail)、cwd-jail、wall-timeout、
-> POSIX rlimit、`unshare -n`(Linux)、受保护路径完整性侦测 + enforce fail-closed。
-> 仍**未做**:独立 OS 账户/ACL 的事前 fs 写阻止、真网络默认 deny(Windows)、
-> Tier B(容器/namespace)、Tier C(broker 中介)。`agent/tests/test_sandbox.py`
-> 12 用例;`LoopGuard` enforce 时按 `DEEPINSIGHT_SANDBOX` 标注实际 tier。
+> Tier A 真生效:env 净化、凭证不可达(HOME→jail)、cwd-jail、wall-timeout、
+> POSIX rlimit、`unshare -n`(Linux)、完整性侦测 + enforce fail-closed。
+> **Tier B 后端已落地**(能力自适应,`DEEPINSIGHT_SANDBOX_TIER=auto|A|B`):
+> `container:docker/podman`(--network none / --read-only / --cap-drop ALL /
+> no-new-privileges / 非 root / pids·mem 限 / repo·凭证不挂载)与 `bubblewrap`
+> (--unshare-all+net / die-with-parent / repo·凭证不 bind)。**诚实回退**:
+> 无强后端 → 退 Tier A + advisory,`report.tier` 反映实际运行档,绝不伪装。
+> `agent/tests/test_sandbox.py` 18 用例(含 argv 构造 / 探测 / 回退;Tier B
+> 实跑用例 skipif —— 仅 CI/Linux 有 docker/bwrap 时执行)。仍**未做**:
+> Windows 真 fs-write 事前阻止(OS 账户·ACL)与真网络 deny、**Tier C broker
+> 中介**(Cedar 真正中介每个 syscall,彻底闭环);spec §9 两环境决策待定。
 
 ## 1. 问题 / 动机
 
@@ -135,4 +141,5 @@ spec 001 把 Cedar 闸门做到了:确定性红线、log-or-deny 审计、删=�
 
 ## Changelog
 - 2026-05-15 初稿(阿宝 / pair with Claude）—— 承接 spec 001 Phase 2 诚实标注的子进程 syscall 缺口
+- 2026-05-16 Tier B 后端(阿宝 / pair):`sandbox.py` 加 `detect_backend`、`bwrap_argv`、`container_argv`;`run_sandboxed(tier='auto'|'A'|'B')` 能力自适应 + 诚实回退(无强后端→Tier A+advisory,不伪装);`SandboxReport.backend`;`tool_manager` 读 `DEEPINSIGHT_SANDBOX_TIER`;`test_sandbox.py` +6 用例(argv/探测/回退)+1 skipif 实跑。全套 **56 过 / 1 skip**(live Tier B 仅 CI/Linux)。Tier A 行为完整保留。
 - 2026-05-16 Tier A 首版(阿宝 / pair):`agent/pipeline/sandbox.py`(`run_sandboxed`/`SandboxReport`/`detect_tier`)。预防层 env 净化+凭证不可达+cwd-jail+wall-timeout+POSIX rlimit+Linux unshare-net;侦测层 protected-path sha256 前后比对,enforce 下 violation/超时 fail-closed。`tool_manager.execute` opt-in 接入(`DEEPINSIGHT_SANDBOX`,默认 off);`LoopGuard` enforce 按实际 tier 标注(不再恒 `sandbox=absent`)。`test_sandbox.py` 12 用例;全套 50 过。**未实现**:OS 账户/ACL 事前写阻止、Windows 真网络 deny、Tier B/C。

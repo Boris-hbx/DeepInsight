@@ -134,10 +134,11 @@ class ToolManager:
             return result.returncode, result.stdout, result.stderr
 
         from .pipeline.sandbox import run_sandboxed
-        rc, out, err, report = run_sandboxed(cmd, mode=sb)
+        sb_tier = os.environ.get("DEEPINSIGHT_SANDBOX_TIER", "auto").strip().lower()
+        rc, out, err, report = run_sandboxed(cmd, mode=sb, tier=sb_tier)
         sys.stderr.write(
-            f"CEDAR-SANDBOX tool={name} tier={report.tier} mode={sb} "
-            f"violations={report.violations} timed_out={report.timed_out}\n"
+            f"CEDAR-SANDBOX tool={name} tier={report.tier} backend={report.backend} "
+            f"mode={sb} violations={report.violations} timed_out={report.timed_out}\n"
         )
         sys.stderr.flush()
         self._increment_usage(name)
