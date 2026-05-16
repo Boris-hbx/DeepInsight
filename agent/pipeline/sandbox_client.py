@@ -20,17 +20,28 @@ class BrokerDenied(RuntimeError):
 
 
 def available() -> bool:
-    return bool(os.environ.get("DS_BROKER_ADDR"))
+    return bool(os.environ.get("DS_BROKER_UDS") or os.environ.get("DS_BROKER_ADDR"))
+
+
+def _connect():
+    """优先 UDS(与 Tier B 组合,穿透 --network none),否则 TCP loopback。"""
+    uds = os.environ.get("DS_BROKER_UDS")
+    if uds and hasattr(socket, "AF_UNIX"):
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(20)
+        s.connect(uds)
+        return s
+    addr = os.environ.get("DS_BROKER_ADDR")
+    if addr:
+        host, port = addr.rsplit(":", 1)
+        return socket.create_connection((host, int(port)), timeout=20)
+    raise BrokerDenied("no broker (DS_BROKER_UDS/ADDR unset): Tier C 下无直接访问")
 
 
 def _request(req: dict) -> dict:
-    addr = os.environ.get("DS_BROKER_ADDR")
     token = os.environ.get("DS_BROKER_TOKEN", "")
-    if not addr:
-        raise BrokerDenied("no broker (DS_BROKER_ADDR unset): Tier C 下无直接访问")
-    host, port = addr.rsplit(":", 1)
     req = {**req, "token": token}
-    with socket.create_connection((host, int(port)), timeout=20) as s:
+    with _connect() as s:
         f = s.makefile("rwb")
         f.write((json.dumps(req) + "\n").encode("utf-8"))
         f.flush()

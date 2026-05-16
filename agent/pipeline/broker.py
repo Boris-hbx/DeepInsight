@@ -14,8 +14,10 @@ spec 001 红线在子进程级**彻底闭环**(不再 advisory / 事后侦测)�
 from __future__ import annotations
 
 import json
+import os
 import secrets
 import socket
+import sys
 import threading
 import urllib.request
 from pathlib import Path
@@ -25,6 +27,11 @@ from .pdp import CedarPDP, Decision
 
 ROOT = Path(__file__).resolve().parents[2]
 _MAX_READ = 1_000_000  # 单次读上限,防内存炸
+
+
+def uds_supported() -> bool:
+    """AF_UNIX 可用且非 Windows(Tier C↔B 组合需 UDS 穿透 --network none)。"""
+    return hasattr(socket, "AF_UNIX") and sys.platform != "win32"
 
 
 def _repo_rel(p: Path) -> str:
@@ -146,17 +153,10 @@ class Broker:
         return {"ok": True, "status": status,
                 "data": body[:_MAX_READ].decode("utf-8", "replace")}
 
-    # -- 传输:127.0.0.1 token 鉴权 socket(跨平台,Tier C 独立态)--------
+    # -- 传输:token 鉴权。TCP(独立 Tier C)/ UDS(与 Tier B 组合,穿透
+    #    --network none,因 UDS 属文件系统非网络命名空间)。 ----------------
 
-    def serve_socket(self, host: str = "127.0.0.1") -> tuple[str, int, str, threading.Thread]:
-        """启动后台 socket 服务。返回 (host, port, token, thread)。
-        与 Tier B `--network none` 组合需改 UDS/管道传输(spec 002 §9)。"""
-        token = secrets.token_hex(16)
-        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        srv.bind((host, 0))
-        srv.listen(8)
-        srv.settimeout(0.5)
-        port = srv.getsockname()[1]
+    def _start(self, srv: socket.socket) -> threading.Thread:
         self._stop = threading.Event()
 
         def _loop():
@@ -174,20 +174,58 @@ class Broker:
                         req = json.loads(line or b"{}")
                     except Exception:
                         req = {}
-                    if req.get("token") != token:
+                    if req.get("token") != self._token:
                         resp = {"ok": False, "error": "bad-token"}
                     else:
                         resp = self.handle(req)
                     f.write((json.dumps(resp) + "\n").encode("utf-8"))
                     f.flush()
-            srv.close()
+            try:
+                srv.close()
+            except Exception:
+                pass
 
         t = threading.Thread(target=_loop, daemon=True)
         t.start()
         self._srv = srv
-        return host, port, token, t
+        return t
+
+    def serve_socket(self, host: str = "127.0.0.1") -> tuple[str, int, str, threading.Thread]:
+        """TCP loopback(Tier C 独立态;Tier B --network none 下不可达 → 用 UDS)。"""
+        self._token = secrets.token_hex(16)
+        srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        srv.bind((host, 0))
+        srv.listen(8)
+        srv.settimeout(0.5)
+        port = srv.getsockname()[1]
+        t = self._start(srv)
+        return host, port, self._token, t
+
+    def serve_uds(self, sock_path) -> tuple[str, str, threading.Thread]:
+        """AF_UNIX(与 Tier B 组合:bind-mount/--bind 进沙箱,穿透网络隔离)。"""
+        if not uds_supported():
+            raise RuntimeError("AF_UNIX unsupported on this platform")
+        self._token = secrets.token_hex(16)
+        p = str(sock_path)
+        try:
+            os.unlink(p)
+        except OSError:
+            pass
+        srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        srv.bind(p)
+        srv.listen(8)
+        srv.settimeout(0.5)
+        t = self._start(srv)
+        self._uds_path = p
+        return p, self._token, t
 
     def stop(self) -> None:
         ev = getattr(self, "_stop", None)
         if ev:
             ev.set()
+        p = getattr(self, "_uds_path", None)
+        if p:
+            try:
+                os.unlink(p)
+            except OSError:
+                pass

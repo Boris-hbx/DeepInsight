@@ -17,7 +17,10 @@ import pytest
 
 pytest.importorskip("cedarpy")
 
-from agent.pipeline.broker import Broker
+from agent.pipeline import broker as bmod
+from agent.pipeline import sandbox as sbx
+from agent.pipeline.broker import Broker, uds_supported
+from agent.pipeline.sandbox import _compose_plan, bwrap_argv, container_argv
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -131,5 +134,75 @@ def test_end_to_end_socket(tmp_path):
         assert "ALLOW=E2E-OK" in p.stdout, p.stderr
         assert "DENIED-OK" in p.stdout
         assert "LEAK" not in p.stdout
+    finally:
+        br.stop()
+
+
+# ── Tier C ↔ B 组合:UDS 传输 + 组合决策 ────────────────────────────────
+
+def test_compose_plan_composed(monkeypatch):
+    monkeypatch.setattr(sbx, "detect_backend", lambda: ("B", "container:docker"))
+    monkeypatch.setattr(bmod, "uds_supported", lambda: True)
+    composed, backend, reason = _compose_plan()
+    assert composed is True and backend == "container:docker"
+
+
+def test_compose_plan_no_strong_backend(monkeypatch):
+    monkeypatch.setattr(sbx, "detect_backend", lambda: ("A", "tierA-launcher"))
+    composed, backend, reason = _compose_plan()
+    assert composed is False and "无强后端" in reason
+
+
+def test_compose_plan_b_but_no_uds(monkeypatch):
+    monkeypatch.setattr(sbx, "detect_backend", lambda: ("B", "bubblewrap"))
+    monkeypatch.setattr(bmod, "uds_supported", lambda: False)
+    composed, backend, reason = _compose_plan()
+    assert composed is False and "UDS 不支持" in reason
+
+
+def test_container_argv_broker_uds_mounts_and_env(tmp_path):
+    a = container_argv(["py", "/x/t.py"], tmp_path, "/x/t.py", "docker",
+                       "python:3-slim", broker_uds="/tmp/b.sock",
+                       extra_env={"DS_BROKER_UDS": "/tmp/b.sock",
+                                  "DS_BROKER_TOKEN": "tk"})
+    assert "--network" in a and "none" in a               # 网络仍隔离
+    assert "/tmp/b.sock:/sbx/broker.sock" in a            # UDS bind-mount
+    assert "DS_BROKER_UDS=/sbx/broker.sock" in a          # 容器内路径
+    assert "DS_BROKER_TOKEN=tk" in a
+
+
+def test_bwrap_argv_broker_uds_bound(tmp_path):
+    a = bwrap_argv(["py", "/x/t.py"], tmp_path, "/x/t.py",
+                   broker_uds="/tmp/b.sock")
+    i = a.index("--bind")
+    assert "/tmp/b.sock" in a and "--unshare-all" in a
+
+
+def test_client_connect_selection(monkeypatch):
+    import agent.pipeline.sandbox_client as cli
+    monkeypatch.delenv("DS_BROKER_UDS", raising=False)
+    monkeypatch.delenv("DS_BROKER_ADDR", raising=False)
+    with pytest.raises(cli.BrokerDenied):                  # 两者皆无 → 拒
+        cli._connect()
+    monkeypatch.setenv("DS_BROKER_ADDR", "127.0.0.1:1")    # TCP 分支(连不上)
+    with pytest.raises(OSError):
+        cli._connect()
+
+
+@pytest.mark.skipif(not uds_supported(),
+                    reason="AF_UNIX 不支持(Windows)—— UDS 用例在 Linux/CI 跑")
+def test_uds_end_to_end(tmp_path, monkeypatch):
+    import agent.pipeline.sandbox_client as cli
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "u.txt").write_text("UDS-OK", encoding="utf-8")
+    br = Broker(root=tmp_path, audit_dir=tmp_path / "a", fetcher=_fake_fetch)
+    sock = tmp_path / "b.sock"
+    _, token, _ = br.serve_uds(sock)
+    try:
+        monkeypatch.setenv("DS_BROKER_UDS", str(sock))
+        monkeypatch.setenv("DS_BROKER_TOKEN", token)
+        assert cli.read_file("data/u.txt") == "UDS-OK"
+        with pytest.raises(cli.BrokerDenied):
+            cli.read_file("agent/policies/agent.cedar")
     finally:
         br.stop()

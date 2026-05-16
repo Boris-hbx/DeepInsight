@@ -157,10 +157,13 @@ def _script_of(cmd: list[str]) -> str | None:
     return None
 
 
-def bwrap_argv(cmd: list[str], jail: Path, script: str | None) -> list[str]:
+def bwrap_argv(cmd: list[str], jail: Path, script: str | None,
+               *, broker_uds: str | None = None) -> list[str]:
     """Linux bubblewrap:unshare 全部(含网络),只读系统 + 脚本,jail 可写。
 
     repo / 凭证 **不 bind** → 子进程不可见(强预防,非事后侦测)。
+    Tier C↔B 组合:--bind broker UDS(穿透网络命名空间,UDS 属文件系统);
+    DS_BROKER_* 经 run_sandboxed 的 env 传入(bwrap 未 --clearenv,子进程可见)。
     """
     a = ["bwrap", "--die-with-parent", "--new-session", "--unshare-all",
          "--proc", "/proc", "--dev", "/dev",
@@ -171,22 +174,32 @@ def bwrap_argv(cmd: list[str], jail: Path, script: str | None) -> list[str]:
             a += ["--ro-bind", d, d]
     if script:
         a += ["--ro-bind", script, script]
+    if broker_uds:
+        a += ["--bind", broker_uds, broker_uds]
     a += ["--"]
     a += cmd
     return a
 
 
 def container_argv(cmd: list[str], jail: Path, script: str | None,
-                   runtime: str, image: str) -> list[str]:
+                   runtime: str, image: str, *, broker_uds: str | None = None,
+                   extra_env: dict | None = None) -> list[str]:
     """docker/podman:无网络、只读 rootfs、丢能力、非 root、资源上限。
 
     只读挂载脚本;jail 作可写工作区。repo / 凭证不挂载 → 不可见。
+    Tier C↔B 组合:bind-mount broker UDS(穿透 --network none,UDS 非网络)
+    并 -e 透传 DS_BROKER_*(容器不继承宿主 env)。
     """
     a = [runtime, "run", "--rm", "--network", "none", "--read-only",
          "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
          "--pids-limit", "64", "--memory", "512m", "-u", "65534:65534",
          "--tmpfs", "/work:rw,size=64m", "-w", "/work",
          "-v", f"{jail}:/work"]
+    if broker_uds:
+        a += ["-v", f"{broker_uds}:/sbx/broker.sock"]
+    for k, v in (extra_env or {}).items():
+        ev = "/sbx/broker.sock" if (k == "DS_BROKER_UDS" and broker_uds) else v
+        a += ["-e", f"{k}={ev}"]
     inner = list(cmd)
     if script:
         a += ["-v", f"{script}:/sbx/tool:ro"]
@@ -204,6 +217,7 @@ def run_sandboxed(
     protect_paths: list[Path] | None = None,
     tier: str = "auto",
     extra_env: dict | None = None,
+    broker_uds: str | None = None,
 ):
     """在沙箱内跑 cmd。返回 (rc, stdout, stderr, SandboxReport)。
 
@@ -251,13 +265,14 @@ def run_sandboxed(
         if avail_backend.startswith("container:"):
             rt = avail_backend.split(":", 1)[1]
             image = os.environ.get("DEEPINSIGHT_SANDBOX_IMAGE", "python:3-slim")
-            run_cmd = container_argv(cmd, jail, script, rt, image)
+            run_cmd = container_argv(cmd, jail, script, rt, image,
+                                     broker_uds=broker_uds, extra_env=extra_env)
             report.enforcing += ["container:network-none", "container:read-only-rootfs",
                                  "container:cap-drop-all", "container:no-new-privileges",
                                  "container:non-root", "container:pids/mem-limit",
                                  "repo+creds:not-mounted"]
         else:  # bubblewrap
-            run_cmd = bwrap_argv(cmd, jail, script)
+            run_cmd = bwrap_argv(cmd, jail, script, broker_uds=broker_uds)
             report.enforcing += ["bwrap:unshare-all+net", "bwrap:die-with-parent",
                                  "bwrap:new-session", "repo+creds:not-bound"]
     else:
@@ -312,6 +327,18 @@ def run_sandboxed(
     return rc, out, err, report
 
 
+def _compose_plan() -> tuple[bool, str, str]:
+    """(composed, backend, reason)。composed=True:Tier C 与 Tier B 组合 —
+    UDS 穿透网络隔离,裸 syscall 被 OS 阻断,broker 成唯一 Cedar 出路(闭环)。"""
+    from .broker import uds_supported
+    avail_tier, avail_backend = detect_backend()
+    if avail_tier == "B" and uds_supported():
+        return True, avail_backend, f"composed:{avail_backend}+UDS"
+    if avail_tier == "B":
+        return False, avail_backend, "Tier B 可用但 UDS 不支持(如 Windows)→ TCP 独立 Tier C"
+    return False, "tierA-launcher", "无强后端 Tier B → TCP 独立 Tier C"
+
+
 def run_brokered(
     cmd: list[str],
     *,
@@ -324,10 +351,11 @@ def run_brokered(
 ):
     """Tier C:Cedar 经 broker 中介子进程的每个 fs/net。
 
-    底座用 Tier A 硬化(env/jail/timeout/完整性)+ token 鉴权 loopback
-    socket 的 broker 通道。**诚实**:未与 Tier B 组合 → 裸 syscall 未被
-    OS 阻断,仅对**用 sandbox_client 的协作工具**完整中介 + 全审计;
-    与 Tier B 组合需 UDS/管道传输(spec 002 §9)。
+    组合态(Tier B 可用 + UDS 支持):子进程在 Tier B 内(裸 fs/net 被 OS
+    阻断),唯一出路是 bind 进沙箱的 UDS broker → **每个 op 过 Cedar**。
+    spec 001 红线在子进程级**对恶意代码也闭环**。
+    独立态(无 Tier B 或无 UDS,如 Windows):Tier A 底座 + TCP broker —
+    对**协作**工具完整中介+全审计;恶意绕开需组合态(诚实标注)。
     """
     from .broker import Broker
 
@@ -336,6 +364,30 @@ def run_brokered(
         net_allow = {d.strip().lower() for d in raw.split(",") if d.strip()}
 
     broker = Broker(net_allow=net_allow, fetcher=fetcher)
+    composed, cbackend, reason = _compose_plan()
+
+    if composed:
+        sock_dir = Path(tempfile.mkdtemp(prefix="ds-brk-"))
+        sock = sock_dir / "broker.sock"
+        _, token, _ = broker.serve_uds(sock)
+        try:
+            rc, out, err, report = run_sandboxed(
+                cmd, mode=mode, jail_root=jail_root, timeout=timeout,
+                protect_paths=protect_paths, tier="B", broker_uds=str(sock),
+                extra_env={"DS_BROKER_UDS": str(sock), "DS_BROKER_TOKEN": token},
+            )
+        finally:
+            broker.stop()
+            shutil.rmtree(sock_dir, ignore_errors=True)
+        base = report.backend
+        report.tier = "C"
+        report.backend = f"C(broker/uds)+{base}"
+        report.enforcing.append(
+            "composed:B-raw-OS-blocked + broker-uds-sole-Cedar-egress"
+            "(spec001 红线子进程级对恶意代码亦闭环)")
+        return rc, out, err, report
+
+    # 独立态:TCP + Tier A 底座
     host, port, token, _ = broker.serve_socket()
     try:
         rc, out, err, report = run_sandboxed(
@@ -346,12 +398,11 @@ def run_brokered(
         )
     finally:
         broker.stop()
-
     base = report.backend
     report.tier = "C"
-    report.backend = f"C(broker)+{base}"
+    report.backend = f"C(broker/tcp)+{base}"
     report.enforcing.append("broker:cedar-mediated-fs-net(每 op 过 Cedar+审计)")
     report.advisory.append(
-        "Tier C 未组合 Tier B:裸 open()/socket() 未被 OS 阻断 —— "
-        "仅协作(用 sandbox_client)工具完整中介;恶意绕开需 Tier B 兜底")
+        f"Tier C 未组合 Tier B({reason}):裸 open()/socket() 未被 OS 阻断 —— "
+        "仅协作工具完整中介;对恶意绕开需组合态(Tier B + UDS)")
     return rc, out, err, report
