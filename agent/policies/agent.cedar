@@ -1,26 +1,24 @@
 // ════════════════════════════════════════════════════════════════════
 //  agent.cedar — DeepInsight Cedar 策略闸门 (spec 001)
-//  status: SCAFFOLD / DRAFT — 由 spec 001 §4.2 v3 转写
+//  status: Phase 0 — 由 CedarPDP 加载;每条策略带 @id 供审计/三态映射
 // --------------------------------------------------------------------
-//  ⛔ 两个未决决策阻塞 enforce(详见同目录 DECISIONS-REQUIRED.md):
+//  ✅ DECISIONS-LOCKED 2026-05-15(详见同目录 DECISIONS-REQUIRED.md):
+//    ① TRUST_ANCHOR        = Git(PDP 比对工作区本文件与 HEAD blob;
+//                            运行中本文件被改/删 → deny-all-dangerous)
+//    ② AUDIT_CHAIN_HEAD    = stderr(每次决策链头 hash 打到 stderr,
+//                            harness/终端捕获,子进程改不了已 flush 的)
 //
-//  UNRESOLVED-DECISION: TRUST_ANCHOR_LOCATION        (spec 001 §9)
-//  UNRESOLVED-DECISION: AUDIT_CHAIN_HEAD_ANCHOR      (spec 001 §9)
-//
-//  !!! CEDARPDP-MUST-REFUSE-ENFORCE-WHILE-UNRESOLVED !!!
-//  未来 CedarPDP 启动时必须 grep 上述 UNRESOLVED-DECISION 标记;
-//  只要还在,enforce 模式一律拒绝启动(只许 shadow)。
-//  这是结构性防遗忘:决策没定 = 系统不进 enforce。
-//
-//  抢跑说明:本文件先于 spec building 阶段创建,且 `agent/` 尚未纳入
-//  git。落地前须先 `git add agent/` 否则改动无法追溯。
+//  三态:带 @gate("approval") 的 permit 命中 → REQUIRE_APPROVAL。
+//  评估顺序由 Cedar 保证:任一 forbid 命中即 DENY;否则 permit;否则默认拒绝。
+//  抢跑说明:`agent/` 已纳入 git(2026-05-15);本文件为权威策略源。
 // ════════════════════════════════════════════════════════════════════
 
 
 // ─── 红线:forbid 压倒一切 ─────────────────────────────────────────
 
-// [advisory 层] 字符串黑名单。混淆("sub"+"process"、base64)必绕得过;
-// 真控制是「低信任 forbid + 强制沙箱(spec 002)」。保留以挡"不费心思"的恶意。
+// [advisory] 字符串黑名单。混淆("sub"+"process"、base64)必绕得过;
+// 真控制是「低信任 forbid + 强制沙箱(spec 002)」。保留挡"不费心思"的恶意。
+@id("forbid.dangerous_module")
 forbid (principal, action == Action::"create_tool", resource)
 when {
   resource.source_code like "*subprocess*" ||
@@ -31,9 +29,9 @@ when {
   resource.source_code like "*shutil.rmtree*"
 };
 
-// 策略文件 / 审计日志 / 凭证 / git = 不可【变更】红线(防自我提权)
-// 覆盖一切变更动作:写 / 删 / 改名 / 改权限 —— 不止 write_file。
-// 前提:resource.path 已由 PEP 规范化(解析 .. 与符号链接)后才进 Cedar。
+// 策略 / 审计 / 凭证 / git = 不可【变更】红线(防自我提权)
+// 覆盖写/删/改名/改权限;resource.path 已由 PEP 规范化后才进 Cedar。
+@id("forbid.policy_secret_mutate")
 forbid (
   principal,
   action in [Action::"write_file", Action::"delete_file",
@@ -48,6 +46,7 @@ when {
 };
 
 // 文件变更白名单:除非规范化路径在白名单内,否则拒(写/删/改名)
+@id("forbid.write_outside_whitelist")
 forbid (
   principal,
   action in [Action::"write_file", Action::"delete_file", Action::"move_file"],
@@ -59,11 +58,12 @@ unless {
 };
 
 // 单轮新建工具上限(防 self-evolving 失控自我增殖)
+@id("forbid.tool_cap")
 forbid (principal, action == Action::"create_tool", resource)
 when { context.tools_created_this_run >= 2 };
 
-// 低信任来源(抓回的网页内容驱动的动作):禁自我演化/改文件/执行。
-// principal 静态,分不清「用户让我」vs「网页让我」;trust 补这个缺口。
+// 低信任来源(抓回网页内容驱动):禁自我演化/改文件/执行。
+@id("forbid.untrusted_context")
 forbid (
   principal,
   action in [Action::"create_tool", Action::"write_file",
@@ -75,7 +75,7 @@ when { context.trust == "untrusted" };
 
 // ─── 审批层:允许但需人确认(@gate("approval")) ───────────────────
 
-// registration 本身受控:防止把恶意脚本标记为「已注册」绕执行白名单。
+@id("approve.register_tool")
 @gate("approval")
 permit (
   principal == Agent::"deepinsight",
@@ -83,6 +83,7 @@ permit (
   resource
 );
 
+@id("approve.create_tool")
 @gate("approval")
 permit (
   principal == Agent::"deepinsight",
@@ -92,9 +93,8 @@ permit (
 
 
 // ─── 白名单:默认拒绝,显式放行已知操作 ───────────────────────────
-// (完成 spec §4.2「显式放行已知」原则:三个 workflow 的声明 step
-//  + 已注册工具执行 + 报告/临时目录写入。否则默认拒绝会挡掉正常流程。)
 
+@id("permit.workflow.daily_radar")
 permit (
   principal == Workflow::"daily-radar",
   action in [Action::"fetch_sources", Action::"fetch_hn", Action::"dedup",
@@ -103,6 +103,7 @@ permit (
   resource
 );
 
+@id("permit.workflow.deep_read")
 permit (
   principal == Workflow::"deep-read",
   action in [Action::"fetch_url", Action::"summarize",
@@ -110,6 +111,7 @@ permit (
   resource
 );
 
+@id("permit.workflow.topic_research")
 permit (
   principal == Workflow::"topic-research",
   action in [Action::"search", Action::"dedup", Action::"rank",
@@ -118,7 +120,7 @@ permit (
   resource
 );
 
-// 执行【已注册】工具(resource.registered 必须来自可信 registry,非 agent 输入)
+@id("permit.execute_registered_tool")
 permit (
   principal == Agent::"deepinsight",
   action == Action::"execute_tool",
@@ -126,7 +128,7 @@ permit (
 )
 when { resource.registered == true };
 
-// 报告 / 临时目录写入(规范化路径已由 PEP 处理;红线 forbid 仍优先)
+@id("permit.report_write")
 permit (
   principal == Agent::"deepinsight",
   action in [Action::"write_file", Action::"delete_file", Action::"move_file"],

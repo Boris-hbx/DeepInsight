@@ -1,7 +1,7 @@
 # ⛔ DECISIONS-REQUIRED — Cedar 闸门进 enforce 前的两个阻塞决策
 
 > 关联:`docs/specs/001-cedar-policy-gate.md` §9 · `agent/policies/agent.cedar` 头部 sentinel
-> 创建:2026-05-15 · 状态:**两项均未决,enforce 被阻塞**
+> 创建:2026-05-15 · 状态:**✅ 两项均已决(2026-05-15),sentinel 已从 agent.cedar 移除,enforce 不再被本文件阻塞**
 >
 > 这两个决策没定,以下安全性质只是半成品:
 > - 「删 = 自锁」(fail-closed-on-missing)
@@ -30,8 +30,12 @@ agent 不可达处。
 | 宿主只读挂载 | 强隔离 | 需宿主/容器配合;Windows 上等价物待定 |
 | 外部 KMS | 最强 | 给离线 agent 引入网络依赖(与项目「离线」取向冲突) |
 
-**决策**:______________  **决策人**:阿宝  **日期**:______
-- [ ] 已决,sentinel 已从 agent.cedar 移除
+**决策**:**Git 作信任锚** —— CedarPDP 启动时比对工作区 `agent.cedar` 与
+`git HEAD` 的 blob 做 attest;运行中本文件被改/删(内存基线 sha 不匹配)
+→ `deny-all-dangerous`(「删=自锁」)。离线、零新依赖、`.git/` 已是红线、
+改策略走正常 commit 不需改代码。残留风险(子进程跑 git 提交)属沙箱范畴 spec 002。
+**决策人**:阿宝  **日期**:2026-05-15
+- [x] 已决,sentinel 已从 agent.cedar 移除(由 CedarPDP `_anchor` 实现)
 
 ## ② AUDIT_CHAIN_HEAD_ANCHOR — 审计哈希链链头外锚到哪?
 
@@ -47,8 +51,12 @@ root 对手能删本地文件;**唯有把链头哈希定期送到 agent 够不�
 | 宿主只读路径 | 本地、强 | 需宿主配合;Windows 等价物待定 |
 | off-box(远端) | 最强留证 | 引入网络依赖 |
 
-**决策**:______________  **决策人**:阿宝  **日期**:______
-- [ ] 已决,sentinel 已从 agent.cedar 移除
+**决策**:**stderr(harness/终端捕获)** —— 每次决策把链头
+`seq+hash` 打到 stderr。已 flush 出进程的内容子进程改不了;零新依赖,
+契合「detect 非 prevent」与离线/单用户规模。主存仍是 `agent/.audit/`
+append-only 文件(已是 agent 不可达红线)。
+**决策人**:阿宝  **日期**:2026-05-15
+- [x] 已决,sentinel 已从 agent.cedar 移除(由 CedarPDP `AuditLog` 实现)
 
 ---
 

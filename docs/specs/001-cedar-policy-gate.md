@@ -5,7 +5,7 @@ author: 阿宝
 reviewers: []
 status: draft          # draft | review | approved | building | done | rejected
 created: 2026-05-15
-updated: 2026-05-15  # v3 审计日志 log-or-deny；v2 删≠写/删=自锁/防注入/强制沙箱/蓝军复审
+updated: 2026-05-15  # v4 决策锁定(git 锚/stderr 链头)+ Phase 0 CedarPDP 落地；v3 审计 log-or-deny；v2 蓝军复审
 related_adrs: []
 related_tasks: []
 ---
@@ -18,8 +18,11 @@ related_tasks: []
 > (`agent.cedar` + `schema.cedarschema`)及审计目录 `agent/.audit/`,
 > **先于 git/sequencing**(`agent/` 尚未纳入版本控制)。两个阻塞决策见
 > `agent/policies/DECISIONS-REQUIRED.md`:**① 信任锚位置 ② 审计链头外锚**。
-> `agent.cedar` 头部含 `UNRESOLVED-DECISION` sentinel —— 未来 `CedarPDP`
-> 必须 grep 之,只要在就**拒绝 enforce(只许 shadow)**。结构性防遗忘。
+> **2026-05-15 决策锁定**:① 信任锚 = **Git**(PDP attest 工作区 vs HEAD blob;
+> 运行中被改/删 → deny-all-dangerous)② 审计链头 = **stderr**。sentinel 已移除,
+> DECISIONS-REQUIRED.md 两项打勾。**Phase 0 已落地**:`agent/pipeline/pdp.py`
+> (`CedarPDP` + `AuditLog`)+ `CedarGate`(shadow 非阻断)+ 测试。`CedarPDP`
+> 保留 sentinel 守卫代码:若 `agent.cedar` 再现 `UNRESOLVED-DECISION` 且 mode=enforce → 拒绝启动。
 
 ## 1. 问题 / 动机
 
@@ -279,11 +282,11 @@ def decide(req):
 
 ## 9. 开放问题
 
-- [ ] **信任锚放哪**:期望校验和编译进代码 / 环境变量 / 宿主只读挂载 / 外部 KMS?—— 决定「删=自锁」是否真成立,需阿宝拍板
+- [x] **信任锚放哪** → **已决 2026-05-15:Git 作锚**。PDP 启动 attest 工作区 `agent.cedar` vs `HEAD` blob(committed/uncommitted-diff/git-unavailable 三态记日志;enforce 下 git-unavailable → deny-all-dangerous);运行中文件 sha 偏离启动基线 → 永久 latch deny-all-dangerous
 - [ ] **沙箱技术选型**(spec 002):受限子进程 + seccomp / venv + import 钩子 / 容器 / Firejail?Windows 上的等价物?
 - [ ] **信任分级粒度**:`user`/`untrusted` 两级够吗?是否要 `tool_output`、`prior_agent` 等中间级
 - [ ] **按参数约束工具**:`permit.known_registered_tool` 现在放行该工具的任意参数(SSRF/DoS 风险)。是否需 per-tool 参数 schema 进 Cedar context
-- [ ] **审计链头锚定到哪**:stderr(harness 捕获)/ 宿主只读路径 / off-box?决定哈希链「删了能否被发现」的强度
+- [x] **审计链头锚定到哪** → **已决 2026-05-15:stderr**(harness/终端捕获)。每次决策 `CEDAR-AUDIT seq=.. hash=..` 打 stderr;主存 `agent/.audit/*.jsonl` append-only + 哈希链
 - [ ] **Windows append 单写者**:`O_APPEND` 原子性在 Windows 与 POSIX 不同,所有 sink 写须经单一串行 logger;与「Windows 沙箱选型」同属一类环境问题
 - [ ] 三态用「策略注解」vs「独立 query」—— 需确认 `cedarpy` diagnostics 能稳定取到命中策略 id
 - [ ] 只读 pipeline step 在 PDP 故障时:fail-closed(默认)vs fail-open —— 需阿宝拍板
@@ -295,4 +298,5 @@ def decide(req):
 ## Changelog
 - 2026-05-15 初稿(阿宝 / pair with Claude）
 - 2026-05-15 v2 加固(阿宝 / pair):① 策略文件保护扩到删/改名/改权限(原仅 write）② fail-closed-on-missing「删=自锁」+ 信任锚 ③ 强制沙箱升为 Phase 2 硬前置 ④ 防 Cedar 注入(结构化实体)⑤ 路径规范化防穿越/软链 ⑥ `context.trust` 信任分级钉死 injection ⑦ registration 受控 ⑧ 审批层无人值守默认 DENY ⑨ 审计日志完整性。新增 6 条风险、7 条对抗用例、4 个开放问题。
+- 2026-05-15 v4 决策锁定 + Phase 0 落地(阿宝 / pair):两阻塞决策定为 ① Git 锚 ② stderr 链头;sentinel 移除、DECISIONS-REQUIRED 打勾;agent.cedar 每条加 `@id`;实现 `agent/pipeline/pdp.py`(`CedarPDP`+`AuditLog`)、`CedarGate`(shadow)、`agent/tests/` golden/对抗用例;cedarpy 入 requirements。
 - 2026-05-15 v3 审计设计(阿宝 / pair):新增 §4.2「审计日志:log-or-deny」—— 记录是放行的前提(记不下即拒)、全判定都记、冗余 sink、哈希链防篡改、逐条 schema、fsync 策略、诚实边界。`agent/.audit/*` 纳入不可变更红线;§2/§5.2/§6/§8/§9 同步细化。
