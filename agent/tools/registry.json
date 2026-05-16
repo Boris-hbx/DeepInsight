@@ -1,0 +1,114 @@
+{
+  "tools": [
+    {
+      "name": "fetch_hn",
+      "description": "Fetch top stories from HN matching a keyword",
+      "path": "tools/fetch_hn.py",
+      "language": "python",
+      "args_schema": "keyword: str, limit: int = 10",
+      "created_at": "2026-05-01",
+      "updated_at": "2026-05-01",
+      "version": 1,
+      "usage_count": 24
+    },
+    {
+      "name": "fetch_rss",
+      "description": "Fetch and parse items from an RSS feed",
+      "path": "tools/fetch_rss.py",
+      "language": "python",
+      "args_schema": "url: str, limit: int = 10",
+      "created_at": "2026-05-01",
+      "updated_at": "2026-05-01",
+      "version": 1,
+      "usage_count": 1
+    },
+    {
+      "name": "filter-by-date",
+      "description": "Filter a JSON array of objects by a date field, keeping only items whose date falls within a target date range",
+      "path": "tools/filter-by-date.py",
+      "language": "python",
+      "args_schema": "json_file: str (path or '-' for stdin), date_field: str, target_date: str = today, range_days: int = 0",
+      "created_at": "2026-05-02",
+      "updated_at": "2026-05-02",
+      "version": 2,
+      "usage_count": 7
+    },
+    {
+      "name": "fetch-url-text",
+      "description": "抓取指定 URL 的网页正文内容，去除 HTML 标签，返回纯文本（可选截断长度），用于深入阅读 HN 链接的原文或任意网页",
+      "path": "tools/fetch-url-text.py",
+      "language": "python",
+      "args_schema": "url: str (必填, 目标网页地址), max_chars: int = 5000 (可选, 返回文本最大字符数), timeout: int = 15 (可选, 请求超时秒数)",
+      "created_at": "2026-05-02",
+      "updated_at": "2026-05-02",
+      "version": 1,
+      "usage_count": 0
+    },
+    {
+      "name": "search-web-news",
+      "description": "通过多个公开新闻聚合源（Google News RSS、Bing News、Reddit 搜索等）批量搜索指定关键词的新闻报道，返回标题、来源、日期、URL 和摘要片段的结构化列表，用于弥补 HN 和单一 RSS 源覆盖不足的问题",
+      "path": "tools/search-web-news.py",
+      "language": "python",
+      "args_schema": "keyword: str (必填, 搜索关键词), sources: list[str] = ['google_news', 'bing_news', 'reddit'] (可选, 要查询的源列表), limit: int = 15 (可选, 每个源最多返回条数), lang: str = 'en' (可选, 语言过滤), days_back: int = 90 (可选, 只返回最近N天的结果)",
+      "created_at": "2026-05-02",
+      "updated_at": "2026-05-02",
+      "version": 1,
+      "usage_count": 8
+    },
+    {
+      "name": "search-arxiv",
+      "description": "通过 arXiv API 搜索学术论文，返回标题、作者、摘要、发布日期、arXiv ID 和 PDF 链接的结构化列表，用于获取 AI/ML 领域最新研究、benchmark 和评估方法等学术信息",
+      "path": "tools/search-arxiv.py",
+      "language": "python",
+      "args_schema": "keyword: str (必填, 搜索关键词, 支持 arXiv 查询语法如 ti:、abs:), max_results: int = 10 (可选, 最多返回条数), sort_by: str = 'submittedDate' (可选, 排序方式: relevance | lastUpdatedDate | submittedDate), sort_order: str = 'descending' (可选, 排序方向: ascending | descending), categories: list[str] = [] (可选, 限定 arXiv 分类如 ['cs.AI', 'cs.CL', 'cs.LG'])",
+      "created_at": "2026-05-02",
+      "updated_at": "2026-05-02",
+      "version": 1,
+      "usage_count": 4
+    },
+    {
+      "name": "search-web",
+      "description": "通用 Web 搜索工具：通过 DuckDuckGo HTML 搜索（无需 API key）抓取搜索结果，返回标题、URL、摘要片段的结构化列表，覆盖博客、白皮书、GitHub、会议资料等非新闻类内容",
+      "path": "tools/search-web.py",
+      "language": "python",
+      "args_schema": "keyword: str (必填, 搜索关键词), max_results: int = 15 (可选, 最多返回条数), region: str = 'wt-wt' (可选, 地区代码如 us-en、wt-wt 表示全球), time_range: str = '' (可选, 时间范围: d=过去一天, w=过去一周, m=过去一月, y=过去一年, 空=不限)",
+      "created_at": "2026-05-02",
+      "updated_at": "2026-05-02",
+      "version": 1,
+      "usage_count": 6
+    },
+    {
+      "name": "batch-fetch-summarize",
+      "description": "批量抓取多个URL的网页正文，并对每篇内容提取结构化摘要（标题、关键论点、关键事实/数据），返回聚合结果列表，用于高效完成多源调研任务",
+      "path": "tools/batch-fetch-summarize.py",
+      "language": "python",
+      "args_schema": "urls: list[str] (必填, 要抓取的URL列表), max_chars_per_page: int = 3000 (可选, 每个页面抓取的最大字符数), summary_mode: str = 'extractive' (可选, 摘要模式: extractive=提取关键句, full=返回全文截断), concurrency: int = 5 (可选, 并发抓取数), timeout: int = 15 (可选, 单个请求超时秒数)",
+      "created_at": "2026-05-02",
+      "updated_at": "2026-05-02",
+      "version": 1,
+      "usage_count": 4
+    },
+    {
+      "name": "create-pptx",
+      "description": "根据 JSON 结构化内容生成 PowerPoint (.pptx) 文件，支持标题页、内容页（含 bullets）、章节页、空白页和演讲者备注",
+      "path": "tools/create-pptx.py",
+      "language": "python",
+      "args_schema": "json_file: str (必填, JSON 文件路径或 '-' 表示 stdin), output_path: str = 'output.pptx' (可选, 输出文件路径)",
+      "created_at": "2026-05-02",
+      "updated_at": "2026-05-02",
+      "version": 1,
+      "usage_count": 1
+    },
+    {
+      "name": "read-pptx",
+      "description": "读取 PowerPoint (.pptx) 文件，提取每页的标题、文本内容、表格、图片数量和演讲者备注，输出结构化 JSON",
+      "path": "tools/read-pptx.py",
+      "language": "python",
+      "args_schema": "input_path: str (必填, .pptx 文件路径)",
+      "created_at": "2026-05-02",
+      "updated_at": "2026-05-02",
+      "version": 1,
+      "usage_count": 0
+    }
+  ]
+}

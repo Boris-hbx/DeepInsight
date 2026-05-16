@@ -1,0 +1,29 @@
+name: deep-read
+description: 单篇深度阅读 — 抓取全文，结构化拆解，蓝军质疑
+
+steps:
+  - step: fetch_url
+    config:
+      max_chars: 15000
+    inputs_from_task: [url]
+    outputs: [full_text]
+
+  - step: summarize
+    inputs: [full_text]
+    config:
+      style: deep-analysis
+      language: zh
+    outputs: [report_md]
+
+  - step: critique
+    inputs: [report_md]
+    config:
+      max_challenges: 5
+    outputs: [report_with_critique]
+
+  - step: render
+    inputs: [report_with_critique]
+    config:
+      format: markdown
+      output_dir: data/reports
+    outputs: [output_path]

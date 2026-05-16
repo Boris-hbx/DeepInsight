@@ -1,0 +1,53 @@
+name: daily-radar
+description: 每日信息雷达 — 扫描多源，去重排序，生成 brief
+
+steps:
+  - step: fetch_sources
+    config:
+      sources_file: data/sources.yaml
+      limit_per_source: 20
+    outputs: [raw_items]
+
+  - step: fetch_hn
+    config:
+      keywords: [agent, Claude, Cursor, Copilot, Aider]
+      limit: 30
+    outputs: [hn_items]
+
+  - step: dedup
+    inputs: [raw_items, hn_items]
+    outputs: [unique_items]
+
+  - step: filter_date
+    inputs: [unique_items]
+    config:
+      range_days: 1
+    outputs: [today_items]
+
+  - step: rank
+    inputs: [today_items]
+    config:
+      topic: "agentic software engineering"
+      top_k: 10
+    outputs: [ranked_items]
+
+  - step: summarize
+    inputs: [ranked_items]
+    config:
+      style: daily-brief
+      language: zh
+    outputs: [report_md]
+
+  - step: critique
+    inputs: [report_md]
+    config:
+      max_challenges: 3
+    outputs: [report_with_critique]
+    skip_if: "ctx.metadata.get('skip_blue')"
+
+  - step: render
+    inputs: [report_with_critique]
+    config:
+      format: markdown
+      output_dir: data/reports
+    outputs: [output_path]

@@ -1,0 +1,48 @@
+name: topic-research
+description: 主题研究 — 多源搜索 + 聚合 + 去重 + 综合报告
+
+steps:
+  - step: search
+    config:
+      engines: [web, arxiv, news]
+      limit_per_engine: 15
+    inputs_from_task: [keyword]
+    outputs: [search_results]
+
+  - step: dedup
+    inputs: [search_results]
+    outputs: [unique_items]
+
+  - step: rank
+    inputs: [unique_items]
+    config:
+      top_k: 10
+    outputs: [ranked_items]
+
+  - step: fetch_url
+    inputs: [ranked_items]
+    config:
+      max_chars: 5000
+      batch: true
+      concurrency: 5
+    outputs: [full_texts]
+
+  - step: summarize
+    inputs: [full_texts]
+    config:
+      style: research-synthesis
+      language: zh
+    outputs: [report_md]
+
+  - step: critique
+    inputs: [report_md]
+    config:
+      max_challenges: 4
+    outputs: [report_with_critique]
+
+  - step: render
+    inputs: [report_with_critique]
+    config:
+      format: markdown
+      output_dir: data/reports
+    outputs: [output_path]

@@ -1,0 +1,5 @@
+# agent/ 运行时产物 —— 不入 git(与根 .gitignore 互补,作用域内自洽)
+__pycache__/
+*.pyc
+tools/.tmp/
+benchmark/*.jsonl

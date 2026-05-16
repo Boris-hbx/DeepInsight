@@ -1,0 +1,3 @@
+# 运行时审计日志不入 git;只跟踪 README.md 与本文件
+*.jsonl
+*.log

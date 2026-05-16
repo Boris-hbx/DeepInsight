@@ -1,0 +1,49 @@
+// schema.cedarschema — Cedar 实体/动作 schema (spec 001)
+// status: SCAFFOLD / DRAFT —— 待 cedarpy 接入后用 validate_policies 校验
+//
+// 用途:CI 用本 schema 校验 agent.cedar 语法/类型,防止"漏写一条 permit
+// 导致 workflow 静默失败"。本文件随实现迭代,以 cedarpy 校验结果为准。
+
+// ─── 实体类型 ─────────────────────────────────────────────────────
+entity Agent;
+entity Workflow;
+entity Step;
+entity Tool      { registered: Bool };
+entity ToolScript { source_code: String };
+entity Path       { path: String };
+
+// ─── 动作 ─────────────────────────────────────────────────────────
+// 危险操作(AgentLoop 接入点 B)
+action "create_tool" appliesTo {
+  principal: [Agent],
+  resource:  [ToolScript],
+  context:   { tools_created_this_run: Long, trust: String }
+};
+
+action "register_tool" appliesTo {
+  principal: [Agent],
+  resource:  [Tool],
+  context:   { trust: String }
+};
+
+action "execute_tool" appliesTo {
+  principal: [Agent],
+  resource:  [Tool],
+  context:   { trust: String }
+};
+
+// 文件变更动作(路径已由 PEP 规范化)
+action "write_file", "delete_file", "move_file", "chmod" appliesTo {
+  principal: [Agent],
+  resource:  [Path],
+  context:   { trust: String }
+};
+
+// Pipeline step 动作(接入点 A;principal 为 Workflow)
+action "fetch_sources", "fetch_hn", "fetch_url", "search", "dedup",
+       "filter_date", "rank", "summarize", "critique", "render"
+appliesTo {
+  principal: [Workflow],
+  resource:  [Step],
+  context:   { steps_done: Long, skip_blue: Bool, trust: String }
+};
