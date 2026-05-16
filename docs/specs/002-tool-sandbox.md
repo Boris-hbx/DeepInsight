@@ -42,7 +42,8 @@ related_tasks: []
 >
 > 仍**未做**:① 容器组合 live 验证(需 Linux+docker;argv/决策已单测)
 > ② Windows 真 fs/net 事前阻止(OS 账户·ACL;Windows 无 UDS/容器组合)
-> ③ spec §9 两环境决策(Windows 隔离选型 / 出网默认)**待你定**。
+> ③ ~~spec §9 两环境决策~~ —— **已裁剪,不做**(2026-05-16):Windows 接受停在
+> Tier A 侦测档;出网沿用已实现默认(Tier C broker default-deny + 域名白名单)。
 
 ## 1. 问题 / 动机
 
@@ -146,8 +147,8 @@ spec 001 把 Cedar 闸门做到了:确定性红线、log-or-deny 审计、删=�
 
 ## 9. 开放问题
 
-- [ ] Windows 隔离选型:独立本地用户+`icacls` vs 受限令牌(Restricted Token) vs AppContainer —— 哪个对个人机器最实际?需阿宝定环境前提(可否建本地用户/是否需管理员)
-- [ ] 出网策略默认值:deny-all vs allowlist 代理 —— 多数工具(fetch/search)需网络,默认太严会大面积误伤
+- [x] ~~Windows 隔离选型(独立用户/受限令牌/AppContainer)~~ —— **裁剪,不做**(阿宝 2026-05-16:不做这么复杂)。Windows 上沙箱**接受停在 Tier A 侦测档**(完整性侦测 + enforce fail-closed),不追求 OS 账户/ACL 事前阻止。强预防仅 Linux+容器/bwrap(Tier B/C)路径。
+- [x] ~~出网策略默认值~~ —— **裁剪,沿用已实现默认**(阿宝 2026-05-16):Tier A = 代理中和(advisory);Tier C broker = **default-deny + `DEEPINSIGHT_NET_ALLOW` 域名白名单**(已实现且合理)。不再另设计。
 - [ ] Tier C broker 的 IPC 形态(stdio 协议 vs 本地 socket)与协议版本化
 - [ ] 是否需 ADR 记录「沙箱分档 + Cedar 中介」架构(建议:是,与 spec 001「确定性+概率守卫并存」一并)
 - [ ] 与 spec 001 §9「信任分级」联动:`context.trust=untrusted` 来源是否强制 Tier B/C
@@ -157,6 +158,7 @@ spec 001 把 Cedar 闸门做到了:确定性红线、log-or-deny 审计、删=�
 
 ## Changelog
 - 2026-05-15 初稿(阿宝 / pair with Claude）—— 承接 spec 001 Phase 2 诚实标注的子进程 syscall 缺口
+- 2026-05-16 范围裁剪(阿宝决定):§9 两环境决策**不做**——"不做这么复杂"。Windows 沙箱接受停在 Tier A 侦测档(不追 OS 账户/ACL 事前阻止);出网沿用已实现默认(Tier C broker default-deny + `DEEPINSIGHT_NET_ALLOW` 域名白名单)。强预防仅 Linux+容器/bwrap 路径。spec 002 视为**到此为止**(后续仅 Linux/CI live 验证 + 真实 agent shadow 跑,非新设计)。
 - 2026-05-16 Tier C↔B 组合(阿宝 / pair):`broker.serve_uds`(AF_UNIX,token)+ `uds_supported()`;`sandbox_client` 优先 `DS_BROKER_UDS`(连不上不退回 raw)。`sandbox._compose_plan()`:Tier B + UDS → 组合态(`run_sandboxed(tier=B, broker_uds=, extra_env=)`,UDS bind 进沙箱穿透 `--network none`,裸 syscall 被 OS 阻断 → 对恶意代码闭环);否则诚实退 TCP 独立态 + advisory。`container_argv` 加 `-v sock` + `-e DS_BROKER_*`,`bwrap_argv` 加 `--bind sock`。`test_broker.py` +7(组合决策三态/UDS 端到端/argv/客户端选择)。全套 73 过 / 2 skip。Tier A/B/C 行为完整保留。
 - 2026-05-16 Tier C broker(阿宝 / pair):`agent/pipeline/broker.py`(Broker:每 op→CedarPDP.decide→ALLOW 才代办,default-deny,token socket,路径越界预防,审计沿用 log-or-deny)+ `sandbox_client.py`(工具侧 read_file/write_out/http_get,无 broker 即拒,不退回 raw)。`agent.cedar` +3 策略(forbid.read_secrets / permit.read_repo_data / permit.net_allowlisted,均 @id)+ schema 加 read_file/net_egress/Net。`run_brokered`(Tier A 底座+broker;`DEEPINSIGHT_SANDBOX_TIER=C`);`run_sandboxed` tier=C 委派 + `extra_env`。`test_broker.py` 11 用例(读/写/网 allow·deny、unknown default-deny、每 op 审计、**真子进程端到端**)。全套 67 过 / 1 skip。诚实:与 Tier B 组合(UDS 传输)才对恶意绕开者闭环;单独 C 对协作工具完整中介+全审计。
 - 2026-05-16 Tier B 后端(阿宝 / pair):`sandbox.py` 加 `detect_backend`、`bwrap_argv`、`container_argv`;`run_sandboxed(tier='auto'|'A'|'B')` 能力自适应 + 诚实回退(无强后端→Tier A+advisory,不伪装);`SandboxReport.backend`;`tool_manager` 读 `DEEPINSIGHT_SANDBOX_TIER`;`test_sandbox.py` +6 用例(argv/探测/回退)+1 skipif 实跑。全套 **56 过 / 1 skip**(live Tier B 仅 CI/Linux)。Tier A 行为完整保留。
