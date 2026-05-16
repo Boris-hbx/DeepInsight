@@ -174,7 +174,7 @@ DenialFeedback(action, resource, reason, matched_policy_id, hint)
 >
 > **自我 DoS 缓解**:策略文件正被人编辑时也会触发锁死。提供:① 明确的运维信号(日志 + 退出码可辨)② 人工 `--policy-override <path>` 显式旁路(仅人可用,需有意为之)。
 
-**强制沙箱(Phase 2 硬前置)**:生成的工具以子进程运行,其 syscall **不经过 Cedar**——它能直接 `Path("agent/policies/...").unlink()`。因此 Phase 2 enforce **必须**先具备:生成工具运行在沙箱内,**无仓库写权限、策略目录只读挂载、出网仅经宿主控制的代理白名单**。无沙箱则 Cedar 对决心绕过者无效。沙箱本体见 spec 002。
+**强制沙箱(Phase 2 硬前置)**:生成的工具以子进程运行,其 syscall **不经过 Cedar**——它能直接 `Path("agent/policies/...").unlink()`。因此 Phase 2 enforce **必须**先具备:生成工具运行在沙箱内,**无仓库写权限、策略目录只读挂载、出网仅经宿主控制的代理白名单**。无沙箱则 Cedar 对决心绕过者无效。沙箱本体见 **spec 002**(`docs/specs/002-tool-sandbox.md`,已起草 draft;三档 A/B/C,Tier C broker 中介让 Cedar 真正中介每个等效 syscall)。
 
 **审批层在无人值守场景**:`@gate("approval")` 命中且**非交互(cron / daily-radar 自动跑)→ 默认 `DENY`**,不是「skip 后自由重规划」。否则自动化场景里审批形同虚设,或被诱导绕到一条恰好自动放行的路径。无人时:宁可任务失败,不可降级放行。
 
