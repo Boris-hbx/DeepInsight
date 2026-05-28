@@ -13,6 +13,7 @@
 | [04](./04-pdf-与长文档处理.md) | PDF 原生传入 + 分块策略 | Claude 原生 PDF + 分层分块应对长文 | Z-4 数据 pipeline |
 | [05](./05-structured-output.md) | Structured Output | `strict: true` 工具调用 / `output_format` 直出 JSON | Z-3 LLM 调用层 |
 | [06](./06-llm-可观测性与评测.md) | LLM 可观测性 + Eval 三层 | OTel trace + unit eval + LLM-judge + 生产采样 | Z-5 运行时保护 / Z-6 测试 |
+| [07](./07-claude-code-编程最佳实践.md) | Claude Code 编程最佳实践 | CLAUDE.md / skill / subagent / hook 五条核心实践 | Z-7 Agent 协作 / Z-8 DevEx |
 
 ## 怎么用
 
